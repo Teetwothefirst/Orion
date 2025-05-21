@@ -2,10 +2,15 @@ const express = require("express");
 const bodyParser = require("body-parser");
 const bcrypt = require("bcrypt");
 var nodemailer = require('nodemailer');
+const fs = require("fs");
+const path = require("path");
 
+require('./db.js')
 const app = express();
 const PORT = 3000;
 
+const emailTemplatePath = path.join(__dirname, "email.html");
+const htmlContent = fs.readFileSync(emailTemplatePath, "utf8");
 // Simulated in-memory database
 const users = [];
 
@@ -20,12 +25,6 @@ function isValidEmail(email) {
 function isStrongPassword(password) {
   return password.length >= 6;
 }
-
-
-
-//Node Mailer code
-
-
 
 
 
@@ -64,15 +63,21 @@ app.post("/api/signup", async (req, res) => {
   service: 'gmail',
   auth: {
     user: 'teetwothefirst@gmail.com',
-    pass: ''
+    pass: 'hpwf imcc bavl bxqk'
+  },
+  //tls idea came from ChatGPT
+  tls: {
+    rejectUnauthorized: false // <-- Ignore self-signed certs
   }
 });
 
 var mailOptions = {
-  from: 'youremail@gmail.com',
+  from: 'teetwothefirst@gmail.com',
   to: email,
   subject: 'Welcome to Orion Chat',
-  text: 'Start chatting with these easy steps \n 1. Login to your account 2. Add Friends in your contact list 3. Start Chatting. That was easy!'
+  // text: 'Start chatting with these easy steps \n 1. Login to your account 2. Add Friends in your contact list 3. Start Chatting. That was easy!'
+  // html: '<h1>Welcome</h1><p>That was easy!</p>'
+  html: htmlContent,
 };
 
 transporter.sendMail(mailOptions, function(error, info){

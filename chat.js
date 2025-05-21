@@ -1,6 +1,7 @@
 const express = require("express");
 const bodyParser = require("body-parser");
 const bcrypt = require("bcrypt");
+var nodemailer = require('nodemailer');
 
 const app = express();
 const PORT = 3000;
@@ -19,6 +20,15 @@ function isValidEmail(email) {
 function isStrongPassword(password) {
   return password.length >= 6;
 }
+
+
+
+//Node Mailer code
+
+
+
+
+
 
 app.post("/api/signup", async (req, res) => {
   const { username, email, password } = req.body;
@@ -49,7 +59,32 @@ app.post("/api/signup", async (req, res) => {
   // 5. Hash password
   const hashedPassword = await bcrypt.hash(password, 10);
 
-  // 6. Save user
+  //6 Send Mail to welcome user
+  var transporter = nodemailer.createTransport({
+  service: 'gmail',
+  auth: {
+    user: 'teetwothefirst@gmail.com',
+    pass: ''
+  }
+});
+
+var mailOptions = {
+  from: 'youremail@gmail.com',
+  to: email,
+  subject: 'Welcome to Orion Chat',
+  text: 'Start chatting with these easy steps \n 1. Login to your account 2. Add Friends in your contact list 3. Start Chatting. That was easy!'
+};
+
+transporter.sendMail(mailOptions, function(error, info){
+  if (error) {
+    console.log(error);
+  } else {
+    console.log('Email sent: ' + info.response);
+  }
+});
+
+
+  // 7. Save user
   const newUser = { id: users.length + 1, username, email, password: hashedPassword };
   users.push(newUser);
   

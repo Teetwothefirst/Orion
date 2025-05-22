@@ -1,0 +1,1000 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Private Chat App</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+            width: 900px;
+            height: 600px;
+            display: flex;
+        }
+
+        /* Auth Forms */
+        .auth-container {
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 40px;
+        }
+
+        .auth-form {
+            background: white;
+            padding: 40px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            width: 100%;
+            max-width: 400px;
+        }
+
+        .auth-form h2 {
+            text-align: center;
+            margin-bottom: 30px;
+            color: #333;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            color: #555;
+            font-weight: 500;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e1e1e1;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: border-color 0.3s;
+        }
+
+        .form-group input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .btn {
+            width: 100%;
+            padding: 12px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: opacity 0.3s;
+        }
+
+        .btn:hover {
+            opacity: 0.9;
+        }
+
+        .auth-switch {
+            text-align: center;
+            margin-top: 20px;
+            color: #666;
+        }
+
+        .auth-switch a {
+            color: #667eea;
+            text-decoration: none;
+            font-weight: 500;
+        }
+
+        /* Chat Interface */
+        .chat-container {
+            display: none;
+            width: 100%;
+            height: 100%;
+        }
+
+        .sidebar {
+            width: 300px;
+            background: #f8f9fa;
+            border-right: 1px solid #e1e1e1;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .sidebar-header {
+            padding: 20px;
+            background: #667eea;
+            color: white;
+        }
+
+        .sidebar-header h3 {
+            margin-bottom: 5px;
+        }
+
+        .sidebar-header .user-info {
+            font-size: 14px;
+            opacity: 0.9;
+        }
+
+        .logout-btn {
+            background: rgba(255,255,255,0.2);
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            margin-top: 10px;
+            font-size: 12px;
+        }
+
+        .sidebar-tabs {
+            display: flex;
+            background: #e9ecef;
+            border-bottom: 1px solid #dee2e6;
+        }
+
+        .sidebar-tab {
+            flex: 1;
+            padding: 15px;
+            text-align: center;
+            cursor: pointer;
+            font-weight: 500;
+            color: #666;
+            border: none;
+            background: transparent;
+            transition: all 0.3s;
+        }
+
+        .sidebar-tab.active {
+            background: #667eea;
+            color: white;
+        }
+
+        .sidebar-tab:hover:not(.active) {
+            background: #f1f3f4;
+        }
+
+        .sidebar-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 10px;
+        }
+
+        .users-list, .groups-list {
+            display: none;
+        }
+
+        .users-list.active, .groups-list.active {
+            display: block;
+        }
+
+        .user-item {
+            padding: 15px;
+            cursor: pointer;
+            border-radius: 10px;
+            margin-bottom: 5px;
+            display: flex;
+            align-items: center;
+            transition: background-color 0.3s;
+        }
+
+        .user-item:hover {
+            background: #e9ecef;
+        }
+
+        .user-item.active {
+            background: #667eea;
+            color: white;
+        }
+
+        .group-item {
+            padding: 15px;
+            cursor: pointer;
+            border-radius: 10px;
+            margin-bottom: 5px;
+            transition: background-color 0.3s;
+            border: 1px solid #e9ecef;
+        }
+
+        .group-item:hover {
+            background: #e9ecef;
+        }
+
+        .group-item.active {
+            background: #667eea;
+            color: white;
+        }
+
+        .group-item h4 {
+            margin: 0 0 5px 0;
+            font-size: 14px;
+        }
+
+        .group-item .group-info {
+            font-size: 12px;
+            color: #666;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .group-item.active .group-info {
+            color: rgba(255,255,255,0.8);
+        }
+
+        .group-member-count {
+            background: #28a745;
+            color: white;
+            padding: 2px 6px;
+            border-radius: 10px;
+            font-size: 10px;
+        }
+
+        .create-group-btn {
+            width: 100%;
+            padding: 12px;
+            background: #28a745;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            margin-bottom: 15px;
+            font-size: 14px;
+        }
+
+        .create-group-btn:hover {
+            background: #218838;
+        }
+
+        .user-status {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            margin-right: 10px;
+        }
+
+        .user-status.online {
+            background: #28a745;
+        }
+
+        .user-status.offline {
+            background: #6c757d;
+        }
+
+        .chat-area {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .chat-header {
+            padding: 20px;
+            background: white;
+            border-bottom: 1px solid #e1e1e1;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .chat-header h4 {
+            margin: 0;
+        }
+
+        .group-header-actions {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .group-manage-btn {
+            background: #ffc107;
+            color: #212529;
+            border: none;
+            padding: 6px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+
+        .group-manage-btn:hover {
+            background: #e0a800;
+        }
+
+        .typing-indicator {
+            font-size: 12px;
+            color: #666;
+            font-style: italic;
+            margin-left: 10px;
+        }
+
+        .messages-container {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+            background: #f8f9fa;
+        }
+
+        .message {
+            margin-bottom: 15px;
+            display: flex;
+        }
+
+        .message.own {
+            justify-content: flex-end;
+        }
+
+        .message-bubble {
+            max-width: 70%;
+            padding: 12px 16px;
+            border-radius: 18px;
+            position: relative;
+        }
+
+        .message.own .message-bubble {
+            background: #667eea;
+            color: white;
+        }
+
+        .message:not(.own) .message-bubble {
+            background: white;
+            border: 1px solid #e1e1e1;
+        }
+
+        .message-sender {
+            font-size: 12px;
+            font-weight: bold;
+            margin-bottom: 5px;
+            opacity: 0.8;
+        }
+
+        .message-time {
+            font-size: 11px;
+            opacity: 0.7;
+            margin-top: 5px;
+        }
+
+        .message-input-container {
+            padding: 20px;
+            background: white;
+            border-top: 1px solid #e1e1e1;
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .message-input {
+            flex: 1;
+            padding: 12px 16px;
+            border: 2px solid #e1e1e1;
+            border-radius: 25px;
+            font-size: 14px;
+            outline: none;
+        }
+
+        .message-input:focus {
+            border-color: #667eea;
+        }
+
+        .send-btn {
+            padding: 12px 20px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+
+        .send-btn:hover {
+            opacity: 0.9;
+        }
+
+        .send-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .no-chat-selected {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex: 1;
+            color: #666;
+            font-size: 18px;
+        }
+
+        .error-message {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 10px;
+            border-radius: 5px;
+            margin-bottom: 15px;
+            text-align: center;
+        }
+
+        .success-message {
+            background: #d4edda;
+            color: #155724;
+            padding: 10px;
+            border-radius: 5px;
+            margin-bottom: 15px;
+            text-align: center;
+        }
+
+        /* Modal Styles */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+
+        .modal {
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            width: 90%;
+            max-width: 500px;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+
+        .modal h3 {
+            margin-bottom: 20px;
+            color: #333;
+        }
+
+        .modal .form-group {
+            margin-bottom: 20px;
+        }
+
+        .modal .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 500;
+            color: #555;
+        }
+
+        .modal .form-group input,
+        .modal .form-group textarea {
+            width: 100%;
+            padding: 10px;
+            border: 2px solid #e1e1e1;
+            border-radius: 8px;
+            font-size: 14px;
+        }
+
+        .modal .form-group textarea {
+            resize: vertical;
+            min-height: 80px;
+        }
+
+        .member-selection {
+            max-height: 200px;
+            overflow-y: auto;
+            border: 1px solid #e1e1e1;
+            border-radius: 8px;
+            padding: 10px;
+        }
+
+        .member-checkbox {
+            display: flex;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .member-checkbox input {
+            margin-right: 10px;
+            width: auto;
+        }
+
+        .modal-buttons {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        .modal-buttons button {
+            flex: 1;
+            padding: 12px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+
+        .btn-primary {
+            background: #667eea;
+            color: white;
+        }
+
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #5a67d8;
+        }
+
+        .btn-secondary:hover {
+            background: #5a6268;
+        }
+
+        /* Group Management */
+        .member-list {
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .member-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 10px;
+            border-bottom: 1px solid #e1e1e1;
+        }
+
+        .member-info {
+            display: flex;
+            align-items: center;
+        }
+
+        .member-actions {
+            display: flex;
+            gap: 5px;
+        }
+
+        .btn-remove {
+            background: #dc3545;
+            color: white;
+            border: none;
+            padding: 4px 8px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 11px;
+        }
+
+        .btn-remove:hover {
+            background: #c82333;
+        }
+
+        .admin-badge {
+            background: #17a2b8;
+            color: white;
+            padding: 2px 6px;
+            border-radius: 10px;
+            font-size: 10px;
+            margin-left: 5px;
+        }
+
+        .add-member-section {
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 1px solid #e1e1e1;
+        }
+
+        .add-member-form {
+            display: flex;
+            gap: 10px;
+            margin-top: 10px;
+        }
+
+        .add-member-select {
+            flex: 1;
+            padding: 8px;
+            border: 1px solid #e1e1e1;
+            border-radius: 4px;
+        }
+
+        .btn-add {
+            background: #28a745;
+            color: white;
+            border: none;
+            padding: 8px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+
+        .btn-add:hover {
+            background: #218838;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Authentication Forms -->
+        <div id="authContainer" class="auth-container">
+            <!-- Login Form -->
+            <div id="loginForm" class="auth-form">
+                <h2>Login to Chat</h2>
+                <div id="loginError" class="error-message" style="display: none;"></div>
+                <form id="loginFormElement">
+                    <div class="form-group">
+                        <label for="loginUsername">Username</label>
+                        <input type="text" id="loginUsername" name="username" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="loginPassword">Password</label>
+                        <input type="password" id="loginPassword" name="password" required>
+                    </div>
+                    <button type="submit" class="btn">Login</button>
+                </form>
+                <div class="auth-switch">
+                    Don't have an account? <a href="#" id="switchToRegister">Register here</a>
+                </div>
+            </div>
+
+            <!-- Register Form -->
+            <div id="registerForm" class="auth-form" style="display: none;">
+                <h2>Register Account</h2>
+                <div id="registerError" class="error-message" style="display: none;"></div>
+                <div id="registerSuccess" class="success-message" style="display: none;"></div>
+                <form id="registerFormElement">
+                    <div class="form-group">
+                        <label for="registerUsername">Username</label>
+                        <input type="text" id="registerUsername" name="username" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="registerEmail">Email</label>
+                        <input type="email" id="registerEmail" name="email" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="registerPassword">Password</label>
+                        <input type="password" id="registerPassword" name="password" required>
+                    </div>
+                    <button type="submit" class="btn">Register</button>
+                </form>
+                <div class="auth-switch">
+                    Already have an account? <a href="#" id="switchToLogin">Login here</a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Chat Interface -->
+        <div id="chatContainer" class="chat-container">
+            <!-- Sidebar with users list -->
+            <div class="sidebar">
+                <div class="sidebar-header">
+                    <h3 id="currentUsername">Welcome</h3>
+                    <div class="user-info">Online now</div>
+                    <button id="logoutBtn" class="logout-btn">Logout</button>
+                </div>
+                
+                <div class="sidebar-tabs">
+                    <button class="sidebar-tab active" id="usersTab">Users</button>
+                    <button class="sidebar-tab" id="groupsTab">Groups</button>
+                </div>
+                
+                <div class="sidebar-content">
+                    <div class="users-list active" id="usersList">
+                        <!-- Users will be populated here -->
+                    </div>
+                    
+                    <div class="groups-list" id="groupsList">
+                        <button class="create-group-btn" id="createGroupBtn">+ Create Group</button>
+                        <!-- Groups will be populated here -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Chat area -->
+            <div class="chat-area">
+                <div id="noChatSelected" class="no-chat-selected">
+                    Select a user or group to start chatting
+                </div>
+                
+                <div id="chatInterface" style="display: none; flex: 1; display: flex; flex-direction: column;">
+                    <div class="chat-header">
+                        <div>
+                            <h4 id="chatWithUser">Chat with User</h4>
+                            <div id="typingIndicator" class="typing-indicator"></div>
+                        </div>
+                        <div class="group-header-actions" id="groupHeaderActions" style="display: none;">
+                            <button class="group-manage-btn" id="manageGroupBtn">Manage Group</button>
+                        </div>
+                    </div>
+                    
+                    <div class="messages-container" id="messagesContainer">
+                        <!-- Messages will appear here -->
+                    </div>
+                    
+                    <div class="message-input-container">
+                        <input type="text" id="messageInput" class="message-input" placeholder="Type your message...">
+                        <button id="sendBtn" class="send-btn">Send</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Create Group Modal -->
+    <div id="createGroupModal" class="modal-overlay" style="display: none;">
+        <div class="modal">
+            <h3>Create New Group</h3>
+            <div id="createGroupError" class="error-message" style="display: none;"></div>
+            
+            <form id="createGroupForm">
+                <div class="form-group">
+                    <label for="groupName">Group Name</label>
+                    <input type="text" id="groupName" name="groupName" required maxlength="50">
+                </div>
+                
+                <div class="form-group">
+                    <label for="groupDescription">Description (optional)</label>
+                    <textarea id="groupDescription" name="groupDescription" placeholder="What's this group about?"></textarea>
+                </div>
+                
+                <div class="form-group">
+                    <label>Add Members</label>
+                    <div class="member-selection" id="memberSelection">
+                        <!-- Available users will be populated here -->
+                    </div>
+                </div>
+                
+                <div class="modal-buttons">
+                    <button type="button" class="btn-secondary" id="cancelCreateGroup">Cancel</button>
+                    <button type="submit" class="btn-primary">Create Group</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Manage Group Modal -->
+    <div id="manageGroupModal" class="modal-overlay" style="display: none;">
+        <div class="modal">
+            <h3 id="manageGroupTitle">Manage Group</h3>
+            <div id="manageGroupError" class="error-message" style="display: none;"></div>
+            
+            <div class="form-group">
+                <label>Current Members</label>
+                <div class="member-list" id="currentMembersList">
+                    <!-- Current members will be populated here -->
+                </div>
+            </div>
+            
+            <div class="add-member-section">
+                <label>Add New Member</label>
+                <div class="add-member-form">
+                    <select class="add-member-select" id="addMemberSelect">
+                        <option value="">Select a user to add...</option>
+                    </select>
+                    <button type="button" class="btn-add" id="addMemberBtn">Add</button>
+                </div>
+            </div>
+            
+            <div class="modal-buttons">
+                <button type="button" class="btn-secondary" id="cancelManageGroup">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        class ChatApp {
+            constructor() {
+                this.socket = null;
+                this.currentUser = null;
+                this.sessionId = null;
+                this.currentChatUser = null;
+                this.currentGroup = null;
+                this.currentChatType = 'user'; // 'user' or 'group'
+                this.users = [];
+                this.groups = [];
+                this.typingTimeout = null;
+                
+                this.init();
+            }
+
+            init() {
+                this.setupEventListeners();
+                this.checkExistingSession();
+            }
+
+            setupEventListeners() {
+                // Auth form handlers
+                document.getElementById('loginFormElement').addEventListener('submit', (e) => this.handleLogin(e));
+                document.getElementById('registerFormElement').addEventListener('submit', (e) => this.handleRegister(e));
+                document.getElementById('switchToRegister').addEventListener('click', (e) => this.switchToRegister(e));
+                document.getElementById('switchToLogin').addEventListener('click', (e) => this.switchToLogin(e));
+                document.getElementById('logoutBtn').addEventListener('click', () => this.handleLogout());
+
+                // Tab switching
+                document.getElementById('usersTab').addEventListener('click', () => this.switchTab('users'));
+                document.getElementById('groupsTab').addEventListener('click', () => this.switchTab('groups'));
+
+                // Group management
+                document.getElementById('createGroupBtn').addEventListener('click', () => this.openCreateGroupModal());
+                document.getElementById('createGroupForm').addEventListener('submit', (e) => this.handleCreateGroup(e));
+                document.getElementById('cancelCreateGroup').addEventListener('click', () => this.closeCreateGroupModal());
+                document.getElementById('manageGroupBtn').addEventListener('click', () => this.openManageGroupModal());
+                document.getElementById('cancelManageGroup').addEventListener('click', () => this.closeManageGroupModal());
+                document.getElementById('addMemberBtn').addEventListener('click', () => this.addGroupMember());
+
+                // Chat handlers
+                document.getElementById('messageInput').addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter') {
+                        this.sendMessage();
+                    } else {
+                        this.handleTyping();
+                    }
+                });
+                document.getElementById('sendBtn').addEventListener('click', () => this.sendMessage());
+
+                // Modal click outside to close
+                document.getElementById('createGroupModal').addEventListener('click', (e) => {
+                    if (e.target.id === 'createGroupModal') this.closeCreateGroupModal();
+                });
+                document.getElementById('manageGroupModal').addEventListener('click', (e) => {
+                    if (e.target.id === 'manageGroupModal') this.closeManageGroupModal();
+                });
+            }
+
+            switchTab(tab) {
+                // Update tab buttons
+                document.querySelectorAll('.sidebar-tab').forEach(t => t.classList.remove('active'));
+                document.getElementById(`${tab}Tab`).classList.add('active');
+
+                // Update content
+                document.querySelectorAll('.users-list, .groups-list').forEach(l => l.classList.remove('active'));
+                document.getElementById(`${tab}List`).classList.add('active');
+
+                if (tab === 'groups') {
+                    this.loadGroups();
+                }
+            }
+
+            switchToRegister(e) {
+                e.preventDefault();
+                document.getElementById('loginForm').style.display = 'none';
+                document.getElementById('registerForm').style.display = 'block';
+            }
+
+            switchToLogin(e) {
+                e.preventDefault();
+                document.getElementById('registerForm').style.display = 'none';
+                document.getElementById('loginForm').style.display = 'block';
+            }
+
+            async handleLogin(e) {
+                e.preventDefault();
+                const formData = new FormData(e.target);
+                const username = formData.get('username');
+                const password = formData.get('password');
+
+                try {
+                    const response = await fetch('http://localhost:3000/api/login', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({ username, password }),
+                    });
+
+                    const data = await response.json();
+
+                    if (response.ok) {
+                        this.sessionId = data.sessionId;
+                        this.currentUser = data.user;
+                        localStorage.setItem('sessionId', this.sessionId);
+                        localStorage.setItem('currentUser', JSON.stringify(this.currentUser));
+                        this.showChatInterface();
+                        this.connectSocket();
+                    } else {
+                        this.showError('loginError', data.error);
+                    }
+                } catch (error) {
+                    this.showError('loginError', 'Connection error. Please try again.');
+                }
+            }
+
+            async handleRegister(e) {
+                e.preventDefault();
+                const formData = new FormData(e.target);
+                const username = formData.get('username');
+                const email = formData.get('email');
+                const password = formData.get('password');
+
+                try {
+                    const response = await fetch('http://localhost:3000/api/register', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({ username, email, password }),
+                    });
+
+                    const data = await response.json();
+
+                    if (response.ok) {
+                        this.showSuccess('registerSuccess', 'Registration successful! Please login.');
+                        setTimeout(() => this.switchToLogin(new Event('click')), 2000);
+                    } else {
+                        this.showError('registerError', data.error);
+                    }
+                } catch (error) {
+                    this.showError('registerError', 'Connection error. Please try again.');
+                }
+            }
+
+            async handleLogout() {
+                try {
+                    await fetch('http://localhost:3000/api/logout', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({ sessionId: this.sessionId }),
+                    });
+                } catch (error) {
+                    console.error('Logout error:', error);
+                }
+
+                localStorage.removeItem('sessionId');
+                localStorage.removeItem('currentUser');
+                this.sessionId = null;
+                this.currentUser = null;
+                
+                if (this.socket) {
+                    this.socket.disconnect();
+                    this.socket = null;
+                }
+
+                this.showAuthInterface();
+            }
+
+            checkExistingSession() {
+                const sessionId = localStorage.getItem('sessionId');
+                const currentUser = localStorage.getItem('currentUser');
+
+                if (sessionId && currentUser) {
+                    this.sessionId = sessionId;
+                    this.currentUser = JSON.parse(currentUser);
+                    this.showChatInterface();
+                    this.connectSocket();
+                }
+            }
+
+            showAuthInterface() {
+                document.getElementById('authContainer').style.display = 'flex';
+                document.getElementById('chatContainer').style.display = 'none';
+            }
+
+            showChatInterface() {
+                document.getElementById('authContainer').style.display = 'none';
+                document.getElementById('chatContainer').style.display = 'flex';
+                document.getElementById('currentUsername').textContent = this.currentUser.username;
+                this.loadUsers();
+            }
+
+            connectSocket() {
+                this.socket = io('http://localhost:3000', {

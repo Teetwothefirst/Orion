@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sliding Button Toggle with Content</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Custom styles for the sliding effect */
+        .toggle-container {
+            position: relative;
+            display: flex;
+            background-color: #e2e8f0; /* Light gray background for the container */
+            border-radius: 9999px; /* Fully rounded corners */
+            padding: 4px; /* Padding inside the container */
+            overflow: hidden; /* Hide overflow for the slider */
+            width: fit-content; /* Adjust width to content */
+            margin-bottom: 24px; /* Space between toggle and content */
+        }
+
+        .toggle-button {
+            position: relative;
+            z-index: 10; /* Ensure buttons are above the slider */
+            padding: 10px 20px;
+            border: none;
+            background-color: transparent; /* Buttons are transparent initially */
+            cursor: pointer;
+            font-weight: 600; /* Semi-bold text */
+            color: #4a5568; /* Darker gray text for inactive */
+            transition: color 0.3s ease-in-out; /* Smooth color transition */
+            border-radius: 9999px; /* Fully rounded corners */
+            min-width: 120px; /* Ensure consistent button width */
+            text-align: center;
+        }
+
+        .toggle-button.active {
+            color: #ffffff; /* White text for active button */
+        }
+
+        .slider {
+            position: absolute;
+            top: 4px; /* Match container padding */
+            bottom: 4px; /* Match container padding */
+            background-color: #3b82f6; /* Blue background for the slider */
+            border-radius: 9999px; /* Fully rounded corners */
+            transition: left 0.3s ease-in-out, width 0.3s ease-in-out; /* Smooth sliding animation */
+            z-index: 5; /* Slider is below buttons */
+        }
+
+        /* Styles for the content windows */
+        .content-window {
+            background-color: #ffffff;
+            border-radius: 8px;
+            padding: 24px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            width: 80%; /* Adjust width as needed */
+            max-width: 600px; /* Max width for readability */
+            text-align: center;
+            display: none; /* Hidden by default */
+            transition: opacity 0.3s ease-in-out; /* Smooth fade in/out */
+        }
+
+        .content-window.active {
+            display: block; /* Show when active */
+            opacity: 1;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 flex flex-col items-center justify-center min-h-screen font-sans p-4">
+
+    <div class="toggle-container shadow-lg">
+        <div class="slider"></div>
+        <button id="button1" class="toggle-button active">Tab A</button>
+        <button id="button2" class="toggle-button">Tab B</button>
+    </div>
+
+    <div id="content1" class="content-window active">
+        <h2 class="text-2xl font-bold text-gray-800 mb-4">Welcome to Tab A!</h2>
+        <p class="text-gray-600">This is the content for the first option. You can place any information, forms, or components here.</p>
+        <p class="text-gray-500 mt-2 text-sm">Feel free to customize this section.</p>
+    </div>
+
+    <div id="content2" class="content-window">
+        <h2 class="text-2xl font-bold text-gray-800 mb-4">Explore Tab B!</h2>
+        <p class="text-gray-600">This section provides details related to the second option. Imagine different features or data here.</p>
+        <p class="text-gray-500 mt-2 text-sm">Switch back and forth to see the content change.</p>
+    </div>
+
+    <script>
+        // Get references to the DOM elements
+        const button1 = document.getElementById('button1');
+        const button2 = document.getElementById('button2');
+        const slider = document.querySelector('.slider');
+        const toggleContainer = document.querySelector('.toggle-container');
+
+        // Get references to the content windows
+        const content1 = document.getElementById('content1');
+        const content2 = document.getElementById('content2');
+
+        // Function to update the slider's position, button active state, and content visibility
+        function updateSlider(activeButton) {
+            // Get the bounding rectangle of the active button relative to the container
+            const containerRect = toggleContainer.getBoundingClientRect();
+            const buttonRect = activeButton.getBoundingClientRect();
+
+            // Calculate the new left position and width for the slider
+            slider.style.left = `${buttonRect.left - containerRect.left}px`;
+            slider.style.width = `${buttonRect.width}px`;
+
+            // Remove 'active' class from all buttons and content windows
+            button1.classList.remove('active');
+            button2.classList.remove('active');
+            content1.classList.remove('active');
+            content2.classList.remove('active');
+
+            // Add 'active' class to the clicked button and its corresponding content window
+            activeButton.classList.add('active');
+            if (activeButton === button1) {
+                content1.classList.add('active');
+            } else {
+                content2.classList.add('active');
+            }
+        }
+
+        // Add event listeners to the buttons
+        button1.addEventListener('click', () => updateSlider(button1));
+        button2.addEventListener('click', () => updateSlider(button2));
+
+        // Initialize the slider position and content visibility on page load
+        window.onload = () => {
+            updateSlider(button1); // Set initial state to button1 and show content1
+        };
+
+        // Optional: Recalculate slider position on window resize
+        window.addEventListener('resize', () => {
+            // Determine which button is currently active and update the slider
+            if (button1.classList.contains('active')) {
+                updateSlider(button1);
+            } else {
+                updateSlider(button2);
+            }
+        });
+    </script>
+</body>
+</html>

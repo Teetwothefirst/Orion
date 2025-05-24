@@ -14,7 +14,12 @@ const io = socketIo(server, {
 });
 
 // Middleware
-app.use(cors());
+// app.use(cors());
+// Allow requests from your frontend origin
+app.use(cors({
+  origin: 'http://127.0.0.1:5500',
+  // credentials: true // if you're sending cookies or auth headers
+}));
 app.use(express.json());
 app.use(express.static('public'));
 

@@ -4,11 +4,23 @@ const socketIo = require('socket.io');
 const cors = require('cors');
 const bcrypt = require('bcrypt');
 
+const allowedOrigins = [
+  'http://localhost:5500',
+  'https://teetwothefirst.github.io'
+];
+
 const app = express();
 const server = http.createServer(app);
 const io = socketIo(server, {
   cors: {
-    origin: "*",
+    // origin: "*",
+     origin: function (origin, callback) {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
     methods: ["GET", "POST"]
   }
 });
@@ -17,8 +29,14 @@ const io = socketIo(server, {
 // app.use(cors());
 // Allow requests from your frontend origin
 app.use(cors({
-  origin: 'http://127.0.0.1:5500',
-  // credentials: true // if you're sending cookies or auth headers
+ origin: function (origin, callback) {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true
 }));
 app.use(express.json());
 app.use(express.static('public'));

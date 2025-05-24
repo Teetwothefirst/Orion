@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/jpg" href="./EAL.jpg" />
     <title>Private Chat App</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.js"></script>
     <style>
@@ -596,7 +597,13 @@
         <div id="authContainer" class="auth-container">
             <!-- Login Form -->
             <div id="loginForm" class="auth-form">
-                <h2>Login to Chat</h2>
+                <!-- <div class="orion_login_head" style="display: flex;justify-content: space-evenly;"> -->  
+                    <div style="display: flex;justify-content: center;">
+                        <img src="./EAL.jpg" alt="" width="50px" height="50px">
+                    </div>
+                    <h2>Login to Chat</h2>
+                <!-- </div> -->
+                
                 <div id="loginError" class="error-message" style="display: none;"></div>
                 <form id="loginFormElement">
                     <div class="form-group">
@@ -616,6 +623,9 @@
 
             <!-- Register Form -->
             <div id="registerForm" class="auth-form" style="display: none;">
+                <div style="display: flex;justify-content: center;">
+                        <img src="./EAL.jpg" alt="" width="50px" height="50px">
+                </div>
                 <h2>Register Account</h2>
                 <div id="registerError" class="error-message" style="display: none;"></div>
                 <div id="registerSuccess" class="success-message" style="display: none;"></div>

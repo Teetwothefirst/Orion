@@ -949,6 +949,30 @@
                 const button2 = document.getElementById('groupsTab');
                 const slider = document.querySelector('.slider');
                 const toggleContainer = document.querySelector('.toggle-container');
+                
+                function updateSlider(activeButton){
+                // Get the bounding rectangle of the active button relative to the container
+                const containerRect = toggleContainer.getBoundingClientRect();
+                const buttonRect = activeButton.getBoundingClientRect();
+
+                // Calculate the new left position and width for the slider
+                slider.style.left = `${buttonRect.left - containerRect.left}px`;
+                slider.style.width = `${buttonRect.width}px`;
+
+                // Remove 'active' class from all buttons and content windows
+                button1.classList.remove('active');
+                button2.classList.remove('active');
+                content1.classList.remove('active');
+                content2.classList.remove('active');
+
+                // Add 'active' class to the clicked button and its corresponding content window
+                activeButton.classList.add('active');
+                if (activeButton === button1) {
+                    content1.classList.add('active');
+                } else {
+                    content2.classList.add('active');
+                }
+                }
 
                 // Get references to the content windows
                 const content1 = document.getElementById('usersList');
@@ -971,30 +995,7 @@
                     }
                 });
             }
-            updateSlider(activeButton){
-                // Get the bounding rectangle of the active button relative to the container
-                const containerRect = toggleContainer.getBoundingClientRect();
-                const buttonRect = activeButton.getBoundingClientRect();
-
-                // Calculate the new left position and width for the slider
-                slider.style.left = `${buttonRect.left - containerRect.left}px`;
-                slider.style.width = `${buttonRect.width}px`;
-
-                // Remove 'active' class from all buttons and content windows
-                button1.classList.remove('active');
-                button2.classList.remove('active');
-                content1.classList.remove('active');
-                content2.classList.remove('active');
-
-                // Add 'active' class to the clicked button and its corresponding content window
-                activeButton.classList.add('active');
-                if (activeButton === button1) {
-                    content1.classList.add('active');
-                } else {
-                    content2.classList.add('active');
-                }
-            }
-
+            
             async loadUsers() {
                 try {
                     const response = await fetch('https://orion-5mkt.onrender.com/api/users', {

@@ -187,7 +187,7 @@
             transition: left 0.3s ease-in-out, width 0.3s ease-in-out; /* Smooth sliding animation */
             z-index: 5; /* Slider is below buttons */
         }
-        
+
         .sidebar-content {
             flex: 1;
             overflow-y: auto;
@@ -888,7 +888,7 @@
                 document.getElementById('authContainer').style.display = 'none';
                 document.getElementById('chatContainer').style.display = 'flex';
                 document.getElementById('currentUsername').textContent = this.currentUser.username;
-
+                this.handleTransition();
                 this.loadUsers();
                 // this.loadGroup();
             }
@@ -944,7 +944,7 @@
                 });
             }
 
-            handleTransitiom(){
+            handleTransition(){
                 const button1 = document.getElementById('usersTab');
                 const button2 = document.getElementById('groupsTab');
                 const slider = document.querySelector('.slider');

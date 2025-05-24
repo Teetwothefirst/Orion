@@ -18,7 +18,7 @@
             margin-bottom: 24px; /* Space between toggle and content */
         }
 
-        .toggle-button {
+        .sidebar-tab {
             position: relative;
             z-index: 10; /* Ensure buttons are above the slider */
             padding: 10px 20px;
@@ -33,7 +33,7 @@
             text-align: center;
         }
 
-        .toggle-button.active {
+        .sidebar-tab.active {
             color: #ffffff; /* White text for active button */
         }
 
@@ -70,17 +70,17 @@
 
     <div class="toggle-container shadow-lg">
         <div class="slider"></div>
-        <button id="button1" class="toggle-button active">Tab A</button>
-        <button id="button2" class="toggle-button">Tab B</button>
+        <button id="usersTab" class="sidebar-tab active">Tab A</button>
+        <button id="groupsTab" class="sidebar-tab">Tab B</button>
     </div>
 
-    <div id="content1" class="content-window active">
+    <div id="usersList" class="content-window active">
         <h2 class="text-2xl font-bold text-gray-800 mb-4">Welcome to Tab A!</h2>
         <p class="text-gray-600">This is the content for the first option. You can place any information, forms, or components here.</p>
         <p class="text-gray-500 mt-2 text-sm">Feel free to customize this section.</p>
     </div>
 
-    <div id="content2" class="content-window">
+    <div id="groupsList" class="content-window">
         <h2 class="text-2xl font-bold text-gray-800 mb-4">Explore Tab B!</h2>
         <p class="text-gray-600">This section provides details related to the second option. Imagine different features or data here.</p>
         <p class="text-gray-500 mt-2 text-sm">Switch back and forth to see the content change.</p>
@@ -88,14 +88,14 @@
 
     <script>
         // Get references to the DOM elements
-        const button1 = document.getElementById('button1');
-        const button2 = document.getElementById('button2');
+        const button1 = document.getElementById('usersTab');
+        const button2 = document.getElementById('groupsTab');
         const slider = document.querySelector('.slider');
         const toggleContainer = document.querySelector('.toggle-container');
 
         // Get references to the content windows
-        const content1 = document.getElementById('content1');
-        const content2 = document.getElementById('content2');
+        const content1 = document.getElementById('usersList');
+        const content2 = document.getElementById('groupsList');
 
         // Function to update the slider's position, button active state, and content visibility
         function updateSlider(activeButton) {

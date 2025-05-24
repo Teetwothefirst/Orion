@@ -3,6 +3,9 @@ const http = require('http');
 const socketIo = require('socket.io');
 const cors = require('cors');
 const bcrypt = require('bcrypt');
+var nodemailer = require('nodemailer');
+const fs = require("fs");
+const path = require("path");
 
 const allowedOrigins = [
   'http://localhost:5500',
@@ -48,7 +51,8 @@ const messages = new Map(); // Map of roomId -> messages array
 const activeUsers = new Map(); // Map of socketId -> user info
 const groups = new Map(); // Map of groupId -> group object
 const groupMessages = new Map(); // Map of groupId -> messages array
-
+const emailTemplatePath = path.join(__dirname, "email.html");
+const htmlContent = fs.readFileSync(emailTemplatePath, "utf8");
 // Utility functions
 const generateSessionId = () => Math.random().toString(36).substring(2, 15);
 
@@ -150,6 +154,37 @@ app.post('/api/register', async (req, res) => {
     // Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
     
+    //Send them a welcome
+      var transporter = nodemailer.createTransport({
+      service: 'gmail',
+      auth: {
+        user: 'teetwothefirst@gmail.com',
+        pass: 'hpwf imcc bavl bxqk'
+      },
+      //tls idea came from ChatGPT
+      tls: {
+        rejectUnauthorized: false // <-- Ignore self-signed certs
+      }
+    });
+    
+    var mailOptions = {
+      from: 'teetwothefirst@gmail.com',
+      to: email,
+      subject: 'Welcome to Orion Chat',
+      // text: 'Start chatting with these easy steps \n 1. Login to your account 2. Add Friends in your contact list 3. Start Chatting. That was easy!'
+      // html: '<h1>Welcome</h1><p>That was easy!</p>'
+      html: htmlContent,
+    };
+    
+    transporter.sendMail(mailOptions, function(error, info){
+      if (error) {
+        console.log(error);
+      } else {
+        console.log('Email sent: ' + info.response);
+      }
+    });
+    
+
     // Create user
     const userId = Date.now().toString();
     const user = {

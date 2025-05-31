@@ -7,6 +7,8 @@ var nodemailer = require('nodemailer');
 const fs = require("fs");
 const path = require("path");
 require('dotenv').config()
+const { v4: uuidv4 } = require('uuid');
+
 
 const allowedOrigins = [
   'http://localhost:5500',
@@ -71,7 +73,7 @@ async function testConnection() {
     console.log('❌ Connection error:', err.message);
   }
 }
-
+testConnection()
 // In-memory storage for active users only (temporary session data)
 const activeUsers = new Map(); // Map of socketId -> user info
 const emailTemplatePath = path.join(__dirname, "email.html");
@@ -260,7 +262,9 @@ const authenticateSocket = async (socket, next) => {
 app.post('/api/register', async (req, res) => {
   try {
     const { username, email, password } = req.body;
-    
+    console.log(username)
+    console.log(email)
+    console.log(password)
     // Check if user already exists
     const { data: existingUser, error: checkError } = await supabase
       .from('users')
@@ -281,8 +285,8 @@ app.post('/api/register', async (req, res) => {
     // Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
     
-    //Send them a welcome
-      var transporter = nodemailer.createTransporter({
+    // //Send them a welcome
+      var transporter = nodemailer.createTransport({
       service: 'gmail',
       auth: {
         user: 'teetwothefirst@gmail.com',
@@ -310,7 +314,8 @@ app.post('/api/register', async (req, res) => {
     });
 
     // Create user
-    const userId = Date.now().toString();
+    // const userId = Date.now().toString();
+    const userId = uuidv4();
     const user = {
       id: userId,
       username,
@@ -326,7 +331,8 @@ app.post('/api/register', async (req, res) => {
       .select();
     
     if (error) {
-      return res.status(500).json({ error: 'Failed to create user' });
+        console.error('Supabase insert error:', error);
+        return res.status(500).json({ error: 'Failed to create user' });
     }
     
     res.status(201).json({ 

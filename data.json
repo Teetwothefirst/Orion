@@ -151,15 +151,3 @@
     }
   }
 }
-
-{
-      "method": "POST",
-      "url": "http://localhost:3000/users",
-      "headers": {
-        "Content-Type": "application/json"
-      },
-      "body": {
-        "email": "john.doe@example.com",
-        "name": "wendy"
-      }
-    }

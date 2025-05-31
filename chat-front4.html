@@ -972,7 +972,8 @@
 
                 this.socket.on('newPrivateMessage', (message) => {
                     this.displayMessage(message);
-                    if (message.senderId === this.currentChatUser?.id) {
+                    // if (message.senderId === this.currentChatUser?.id) {
+                    if (message.sender_id === this.currentChatUser?.id) {
                         this.scrollToBottom();
                     }
                 });
@@ -1101,7 +1102,8 @@
                 const container = document.getElementById('messagesContainer');
                 const messageElement = document.createElement('div');
                 
-                const isOwnMessage = message.senderId === this.currentUser.id;
+                // const isOwnMessage = message.senderId === this.currentUser.id;
+                const isOwnMessage = message.sender_id === this.currentUser.id;
                 messageElement.className = `message ${isOwnMessage ? 'own' : ''}`;
                 
                 const time = new Date(message.timestamp).toLocaleTimeString([], {

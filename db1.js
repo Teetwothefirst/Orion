@@ -20,10 +20,10 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 async function testConnection() {
   try {
     const { data, error } = await supabase
-      .from('users') // Replace 'users' with any table name you have
+      .from('usedcon') // Replace 'usedcon' with any table name you have
       .select('count', { count: 'exact' })
       .limit(1);
-    
+
     if (error) {
       console.log('❌ Database connection failed:', error.message);
     } else {
@@ -38,21 +38,33 @@ async function testConnection() {
 
 // CREATE - Add a new user
 app.post('/users', async (req, res) => {
+  console.log(req.body)
   try {
     const { name, email } = req.body;
-    
+    console.log(name)
+    console.log(email)
+    // Validation
+    if (!name || name.trim() === '') {
+      return res.status(400).json({ error: 'Name is required and cannot be empty' });
+    }
+    if (!email || email.trim() === '') {
+      return res.status(400).json({ error: 'Email is required and cannot be empty' });
+    }
+
+    console.log('Creating user with:', { name, email }); // Debug log
+
     const { data, error } = await supabase
       .from('usedcon')
-      .insert([{ name, email }])
+      .insert([{ name: name.trim(), email: email.trim() }])
       .select();
 
     if (error) {
       return res.status(400).json({ error: error.message });
     }
 
-    res.status(201).json({ 
-      message: 'User created successfully', 
-      user: data[0] 
+    res.status(201).json({
+      message: 'User created successfully',
+      user: data[0]
     });
   } catch (err) {
     res.status(500).json({ error: 'Server error: ' + err.message });
@@ -80,7 +92,7 @@ app.get('/users', async (req, res) => {
 app.get('/users/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    
+
     const { data, error } = await supabase
       .from('usedcon')
       .select('*')
@@ -102,10 +114,20 @@ app.put('/users/:id', async (req, res) => {
   try {
     const { id } = req.params;
     const { name, email } = req.body;
-    
+
+    // Validation
+    if (!name || name.trim() === '') {
+      return res.status(400).json({ error: 'Name is required and cannot be empty' });
+    }
+    if (!email || email.trim() === '') {
+      return res.status(400).json({ error: 'Email is required and cannot be empty' });
+    }
+
+    console.log('Updating user with:', { id, name, email }); // Debug log
+
     const { data, error } = await supabase
       .from('usedcon')
-      .update({ name, email })
+      .update({ name: name.trim(), email: email.trim() })
       .eq('id', id)
       .select();
 
@@ -117,9 +139,9 @@ app.put('/users/:id', async (req, res) => {
       return res.status(404).json({ error: 'User not found' });
     }
 
-    res.json({ 
-      message: 'User updated successfully', 
-      user: data[0] 
+    res.json({
+      message: 'User updated successfully',
+      user: data[0]
     });
   } catch (err) {
     res.status(500).json({ error: 'Server error: ' + err.message });
@@ -130,7 +152,7 @@ app.put('/users/:id', async (req, res) => {
 app.delete('/users/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    
+
     const { data, error } = await supabase
       .from('usedcon')
       .delete()
@@ -145,9 +167,9 @@ app.delete('/users/:id', async (req, res) => {
       return res.status(404).json({ error: 'User not found' });
     }
 
-    res.json({ 
-      message: 'User deleted successfully', 
-      user: data[0] 
+    res.json({
+      message: 'User deleted successfully',
+      user: data[0]
     });
   } catch (err) {
     res.status(500).json({ error: 'Server error: ' + err.message });

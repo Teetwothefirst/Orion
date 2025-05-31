@@ -828,10 +828,10 @@ io.on('connection', (socket) => {
       
       // Create message object
       const messageObj = {
-        id: Date.now().toString(),
+        id: uuidv4(),
         sender_id: socket.userId,
-        sender_username: socket.user.username,
-        target_user_id: targetUserId,
+        // sender_username: socket.user.username,
+        receiver_id: targetUserId,
         message,
         timestamp: timestamp || new Date(),
         room_id: roomId

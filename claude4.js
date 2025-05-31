@@ -346,7 +346,9 @@ app.post('/api/register', async (req, res) => {
 });
 
 app.post('/api/login', async (req, res) => {
-  try {
+  console.log('Incoming login request body:', req.body);
+
+    try {
     const { username, password } = req.body;
     
     //Supabase Find User
@@ -378,6 +380,7 @@ app.post('/api/login', async (req, res) => {
       ]);
     
     if (sessionError) {
+        console.error('Supabase session insert error:', sessionError);
       return res.status(500).json({ error: 'Failed to create session' });
     }
     

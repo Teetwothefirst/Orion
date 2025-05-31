@@ -873,6 +873,7 @@
                         this.showError('loginError', data.error);
                     }
                 } catch (error) {
+                    console.log(error)
                     this.showError('loginError', 'Connection error. Please try again.');
                 }
             }

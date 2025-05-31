@@ -5,7 +5,7 @@ var nodemailer = require('nodemailer');
 const fs = require("fs");
 const path = require("path");
 
-require('./db.js')
+require('../db.js')
 const app = express();
 const PORT = 3000;
 

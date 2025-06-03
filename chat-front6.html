@@ -1166,7 +1166,7 @@
                 document.getElementById('messageInput').addEventListener('keypress', (e) => {
                     if (e.key === 'Enter') {
                         // this.sendMessage();
-                        if (currentGroupId) {
+                        if (this.currentGroupId) {
                             sendGroupMessage();
                         } else if (currentChatUser) {
                             sendMessage(); // Your existing private message function
@@ -1177,7 +1177,7 @@
                 });
                 document.getElementById('sendBtn').addEventListener('click', () => {
                     // this.sendMessage()
-                    if (currentGroupId) {
+                    if (this.currentGroupId) {
                         sendGroupMessage();
                     } else if (currentChatUser) {
                         sendMessage(); // Your existing private message function
@@ -1187,7 +1187,7 @@
                 // Add typing indicator for groups
                 let groupTypingTimeout;
                 document.getElementById('messageInput').addEventListener('input', (e) => {
-                    if (currentGroupId) {
+                    if (this.currentGroupId) {
                         // Emit typing start
                         socket.emit('typingInGroup', {
                             groupId: currentGroupId,
@@ -1278,6 +1278,10 @@
                         localStorage.setItem('currentUser', JSON.stringify(this.currentUser));
                         this.showChatInterface();
                         this.connectSocket();
+                        // Your existing login success code...
+                        currentUserId = data.user.userId;
+                        currentUsername = data.user.username;
+                        
                         // Load user's groups
                         await loadUserGroups();
                        
@@ -1384,7 +1388,7 @@
                 this.socket.on('connect', () => {
                     console.log('Connected to server');
 
-                     // Join all user's group rooms
+                    //  Join all user's group rooms
                     if (currentUserId) {
                         socket.emit('joinUserGroupRooms');
                     }

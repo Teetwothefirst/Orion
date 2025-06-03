@@ -1389,7 +1389,7 @@
                     console.log('Connected to server');
 
                     //  Join all user's group rooms
-                    if (currentUserId) {
+                    if (this.currentUserId) {
                         socket.emit('joinUserGroupRooms');
                     }
                 });

@@ -626,6 +626,333 @@
             font-size: 10px;
             margin-left: 5px;
         }
+
+        /* Additional Style */
+        /* ============================================
+   ADD THESE CSS RULES TO YOUR EXISTING STYLES
+   ============================================ */
+
+/* Group-specific styling */
+.group-item {
+    border-left: 4px solid #007bff; /* Blue border to distinguish groups */
+}
+
+.group-item .user-status {
+    background-color: #007bff;
+    color: white;
+    font-size: 0.7em;
+    padding: 2px 6px;
+    border-radius: 10px;
+    text-transform: uppercase;
+}
+
+/* Create group button styling */
+.create-group-btn {
+    width: 100%;
+    margin-bottom: 15px;
+    background-color: #28a745;
+    color: white;
+    border: none;
+    padding: 10px;
+    border-radius: 5px;
+    cursor: pointer;
+    font-weight: bold;
+}
+
+.create-group-btn:hover {
+    background-color: #218838;
+}
+
+/* Group message styling */
+.message-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 4px;
+    font-size: 0.8em;
+    color: #666;
+}
+
+.message-sender {
+    font-weight: bold;
+    color: #333;
+}
+
+.message-time {
+    color: #999;
+    font-size: 0.9em;
+}
+
+/* Different styling for group messages vs private messages */
+.other-message .message-sender {
+    color: #007bff;
+}
+
+.own-message .message-header {
+    flex-direction: row-reverse;
+}
+
+.own-message .message-sender {
+    color: #28a745;
+}
+
+/* Group typing indicator */
+#typingIndicator {
+    font-style: italic;
+    color: #666;
+    font-size: 0.9em;
+    padding: 5px 10px;
+    margin-bottom: 5px;
+}
+
+/* Context menu styling */
+.context-menu {
+    background: white;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    overflow: hidden;
+    min-width: 150px;
+}
+
+.context-menu-item {
+    padding: 10px 16px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.context-menu-item:hover {
+    background-color: #f8f9fa;
+}
+
+.context-menu-item:active {
+    background-color: #e9ecef;
+}
+
+/* Modal enhancements for group creation */
+.modal-body .form-control {
+    margin-bottom: 10px;
+}
+
+.modal-body .form-select {
+    margin-bottom: 10px;
+}
+
+/* Group list container */
+.groupTab {
+    margin-top: 10px;
+}
+
+.groupTab .group-item {
+    margin-bottom: 8px;
+    border-radius: 6px;
+    transition: all 0.2s ease-in-out;
+}
+
+.groupTab .group-item:hover {
+    transform: translateX(5px);
+    box-shadow: 0 2px 8px rgba(0, 123, 255, 0.2);
+}
+
+/* Active group indicator */
+.group-item.active {
+    background-color: #e3f2fd;
+    border-left-color: #1976d2;
+    border-left-width: 6px;
+}
+
+/* Group member count indicator */
+.group-member-count {
+    background-color: #6c757d;
+    color: white;
+    font-size: 0.7em;
+    padding: 2px 6px;
+    border-radius: 12px;
+    margin-left: 8px;
+}
+
+/* Public/Private group indicators */
+.group-privacy-indicator {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    margin-right: 6px;
+}
+
+.group-privacy-indicator.public {
+    background-color: #28a745;
+}
+
+.group-privacy-indicator.private {
+    background-color: #dc3545;
+}
+
+/* Enhanced message styling for groups */
+.message.group-message {
+    position: relative;
+    padding-left: 8px;
+}
+
+.message.group-message.own-message {
+    padding-right: 8px;
+    padding-left: 0;
+}
+
+/* Group notification badges */
+.group-notification-badge {
+    position: absolute;
+    top: -5px;
+    right: -5px;
+    background-color: #dc3545;
+    color: white;
+    border-radius: 50%;
+    width: 18px;
+    height: 18px;
+    font-size: 0.7em;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .create-group-btn {
+        font-size: 0.9em;
+        padding: 8px;
+    }
+    
+    .message-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 2px;
+    }
+    
+    .own-message .message-header {
+        align-items: flex-end;
+    }
+    
+    .context-menu {
+        min-width: 120px;
+    }
+    
+    .context-menu-item {
+        padding: 8px 12px;
+        font-size: 0.9em;
+    }
+}
+
+/* Loading states */
+.loading-groups {
+    text-align: center;
+    padding: 20px;
+    color: #666;
+    font-style: italic;
+}
+
+.loading-groups::after {
+    content: '...';
+    animation: dots 1.5s steps(5, end) infinite;
+}
+
+@keyframes dots {
+    0%, 20% {
+        color: rgba(0,0,0,0);
+        text-shadow:
+            .25em 0 0 rgba(0,0,0,0),
+            .5em 0 0 rgba(0,0,0,0);
+    }
+    40% {
+        color: black;
+        text-shadow:
+            .25em 0 0 rgba(0,0,0,0),
+            .5em 0 0 rgba(0,0,0,0);
+    }
+    60% {
+        text-shadow:
+            .25em 0 0 black,
+            .5em 0 0 rgba(0,0,0,0);
+    }
+    80%, 100% {
+        text-shadow:
+            .25em 0 0 black,
+            .5em 0 0 black;
+    }
+}
+
+/* Error states */
+.group-error {
+    background-color: #f8d7da;
+    color: #721c24;
+    padding: 10px;
+    border: 1px solid #f5c6cb;
+    border-radius: 4px;
+    margin: 10px 0;
+    font-size: 0.9em;
+}
+
+.group-success {
+    background-color: #d4edda;
+    color: #155724;
+    padding: 10px;
+    border: 1px solid #c3e6cb;
+    border-radius: 4px;
+    margin: 10px 0;
+    font-size: 0.9em;
+}
+
+/* Enhanced tabs for better group/user distinction */
+.nav-pills .nav-link {
+    border-radius: 20px;
+    margin: 0 4px;
+    transition: all 0.3s ease;
+}
+
+.nav-pills .nav-link.active {
+    background-color: #007bff;
+    transform: scale(1.05);
+}
+
+.nav-pills .nav-link:not(.active):hover {
+    background-color: #e9ecef;
+    color: #007bff;
+}
+
+/* Group settings button (if you add one) */
+.group-settings-btn {
+    background: none;
+    border: none;
+    color: #6c757d;
+    cursor: pointer;
+    padding: 4px;
+    border-radius: 4px;
+    transition: all 0.2s;
+}
+
+.group-settings-btn:hover {
+    background-color: #f8f9fa;
+    color: #495057;
+}
+
+/* Online status in groups */
+.group-member-online {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    background-color: #28a745;
+    border-radius: 50%;
+    margin-left: 4px;
+}
+
+.group-member-offline {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    background-color: #6c757d;
+    border-radius: 50%;
+    margin-left: 4px;
+}
     </style>
 </head>
 <body>
@@ -811,7 +1138,11 @@
                 this.currentChatUser = null;
                 // this.
                 this.users = [];
-                this.group = [];
+                // this.group = [];
+                let currentGroupId = null;
+                let userGroups = [];
+                let groupMembers = {};
+                let groupTypingUsers = {};
 
                 this.typingTimeout = null;
                 
@@ -834,12 +1165,81 @@
                 // Chat handlers
                 document.getElementById('messageInput').addEventListener('keypress', (e) => {
                     if (e.key === 'Enter') {
-                        this.sendMessage();
+                        // this.sendMessage();
+                        if (currentGroupId) {
+                            sendGroupMessage();
+                        } else if (currentChatUser) {
+                            sendMessage(); // Your existing private message function
+                        }
                     } else {
                         this.handleTyping();
                     }
                 });
-                document.getElementById('sendBtn').addEventListener('click', () => this.sendMessage());
+                document.getElementById('sendBtn').addEventListener('click', () => {
+                    // this.sendMessage()
+                    if (currentGroupId) {
+                        sendGroupMessage();
+                    } else if (currentChatUser) {
+                        sendMessage(); // Your existing private message function
+                    }
+                });
+                
+                // Add typing indicator for groups
+                let groupTypingTimeout;
+                document.getElementById('messageInput').addEventListener('input', (e) => {
+                    if (currentGroupId) {
+                        // Emit typing start
+                        socket.emit('typingInGroup', {
+                            groupId: currentGroupId,
+                            isTyping: true
+                        });
+                        
+                        // Clear existing timeout
+                        clearTimeout(groupTypingTimeout);
+                        
+                        // Set timeout to stop typing indicator
+                        groupTypingTimeout = setTimeout(() => {
+                            socket.emit('typingInGroup', {
+                                groupId: currentGroupId,
+                                isTyping: false
+                            });
+                        }, 1000);
+                    }
+                });
+                // Add this event listener for your create group modal
+
+                document.querySelector('#exampleModal .btn-primary').addEventListener('click', async () => {
+                    const groupName = document.getElementById('recipient-name').value.trim();
+                    const groupDescription = document.getElementById('message-text').value.trim();
+                    const isPublic = false; // You can add a checkbox for this
+                    
+                    if (!groupName) {
+                        alert('Group name is required');
+                        return;
+                    }
+                    
+                    const groupData = {
+                        name: groupName,
+                        description: groupDescription,
+                        isPublic: isPublic,
+                        selectedUsers: [] // You can implement user selection later
+                    };
+                    
+                    const newGroup = await createGroup(groupData);
+                    
+                    if (newGroup) {
+                        // Close modal
+                        const modal = bootstrap.Modal.getInstance(document.getElementById('exampleModal'));
+                        modal.hide();
+                        
+                        // Clear form
+                        document.getElementById('recipient-name').value = '';
+                        document.getElementById('message-text').value = '';
+                        
+                        // Optionally open the new group chat
+                        openGroupChat(newGroup);
+                    }
+                });
             }
 
             switchToRegister(e) {
@@ -878,6 +1278,12 @@
                         localStorage.setItem('currentUser', JSON.stringify(this.currentUser));
                         this.showChatInterface();
                         this.connectSocket();
+                        // Load user's groups
+                        await loadUserGroups();
+                       
+                        // Join group rooms
+                        socket.emit('joinUserGroupRooms');
+                         addGroupContextMenu();
                     } else {
                         this.showError('loginError', data.error);
                     }
@@ -977,6 +1383,11 @@
 
                 this.socket.on('connect', () => {
                     console.log('Connected to server');
+
+                     // Join all user's group rooms
+                    if (currentUserId) {
+                        socket.emit('joinUserGroupRooms');
+                    }
                 });
 
                 this.socket.on('newPrivateMessage', (message) => {
@@ -1018,6 +1429,68 @@
                 this.socket.on('error', (error) => {
                     console.error('Socket error:', error);
                 });
+                
+                // Handle new group messages
+                this.socket.on('newGroupMessage', (messageObj) => {
+                    if (currentGroupId === messageObj.group_id) {
+                        // Display the message in current chat
+                        const container = document.getElementById('messagesContainer');
+                        const messageDiv = document.createElement('div');
+                        messageDiv.className = `message ${messageObj.sender_id === currentUserId ? 'own-message' : 'other-message'}`;
+                        
+                        const time = new Date(messageObj.sent_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+                        
+                        messageDiv.innerHTML = `
+                            <div class="message-header">
+                                <span class="message-sender">${escapeHtml(messageObj.sender_username)}</span>
+                                <span class="message-time">${time}</span>
+                            </div>
+                            <div class="message-content">${escapeHtml(messageObj.content)}</div>
+                        `;
+                        
+                        container.appendChild(messageDiv);
+                        container.scrollTop = container.scrollHeight;
+                    } else {
+                        // Show notification for other groups (you can implement this)
+                        console.log('New message in group:', messageObj.group_id);
+                    }
+                });
+
+                // Handle group typing indicators
+                this.socket.on('userTypingInGroup', (data) => {
+                    if (currentGroupId === data.groupId) {
+                        const typingIndicator = document.getElementById('typingIndicator');
+                        
+                        if (!groupTypingUsers[data.groupId]) {
+                            groupTypingUsers[data.groupId] = new Set();
+                        }
+                        
+                        if (data.isTyping) {
+                            groupTypingUsers[data.groupId].add(data.username);
+                        } else {
+                            groupTypingUsers[data.groupId].delete(data.username);
+                        }
+                        
+                        const typingUsers = Array.from(groupTypingUsers[data.groupId]);
+                        if (typingUsers.length > 0) {
+                            typingIndicator.textContent = `${typingUsers.join(', ')} ${typingUsers.length === 1 ? 'is' : 'are'} typing...`;
+                            typingIndicator.style.display = 'block';
+                        } else {
+                            typingIndicator.style.display = 'none';
+                        }
+                    }
+                });
+
+                // Handle user joining group room
+                this.socket.on('userJoinedGroupRoom', (data) => {
+                    console.log(`${data.username} joined group ${data.groupId}`);
+                    // You can show a notification or update online status
+                });
+
+                // Handle user leaving group room
+                this.socket.on('userLeftGroupRoom', (data) => {
+                    console.log(`${data.username} left group ${data.groupId}`);
+                });
             }
 
             async loadUsers() {
@@ -1039,25 +1512,20 @@
                 }
             }
 
-            // async loadGroup(){
-            //      try {
-            //         const response = await fetch('https://orion-2.onrender.com/api/group', {
-            //             headers: {
-            //                 'Authorization': `Bearer ${this.sessionId}`
-            //             }
-            //         });
-
-            //         const data = await response.json();
+            async loadUserGroups() {
+                try {
+                    const response = await fetch('https://orion-2.onrender.com/api/groups/my');
+                    const data = await response.json();
                     
-            //         if (response.ok) {
-            //             this.group = data.group;
-            //             this.displayUsers();
-            //         }
-            //     } catch (error) {
-            //         console.error('Error loading users:', error);
-            //     }
-            // }
-
+                    if (data.groups) {
+                        userGroups = data.groups;
+                        displayUserGroups();
+                    }
+                } catch (error) {
+                    console.error('Error loading user groups:', error);
+                }
+            }
+            
             displayUsers() {
                 const usersList = document.getElementById('pills-home');
                 usersList.innerHTML = '';
@@ -1076,25 +1544,29 @@
                     usersList.appendChild(userElement);
                 });
             }
-            displayGroup(){
-                const groupList = document.getElementById('groupTab');
-                groupList.innerHTML = '';
-
-                this.users.forEach(user => {
+           
+            displayUserGroups() {
+                const groupsContainer = document.querySelector('.groupTab');
+                
+                if (!groupsContainer) return;
+                
+                groupsContainer.innerHTML = '';
+                
+                userGroups.forEach(group => {
                     const groupElement = document.createElement('div');
-                    groupElement.className = 'group-item';
-                    groupElement.dataset.userId = user.id;
-                    
+                    groupElement.className = 'user-item group-item';
                     groupElement.innerHTML = `
-                        <div class="user-status ${user.isOnline ? 'online' : 'offline'}"></div>
-                        <div>${user.username}</div>
+                        <div class="user-info">
+                            <span class="username">${escapeHtml(group.name)}</span>
+                            <span class="user-status">${group.user_role}</span>
+                        </div>
                     `;
-
-                    groupElement.addEventListener('click', () => this.selectUser(user));
-                    groupList.appendChild(groupElement);
+                    
+                    groupElement.addEventListener('click', () => openGroupChat(group));
+                    groupsContainer.appendChild(groupElement);
                 });
             }
-
+            
             selectUser(user) {
                 // Update UI
                 document.querySelectorAll('.user-item').forEach(item => {
@@ -1113,11 +1585,154 @@
                 // Join chat room and load history
                 this.socket.emit('joinChat', { targetUserId: user.id });
             }
+            
             selectGroup(group){
 
             }
+            escapeHtml(text) {
+                const div = document.createElement('div');
+                div.textContent = text;
+                return div.innerHTML;
+            }
+            clearCurrentChat() {
+                currentChatUser = null;
+                currentGroupId = null;
+                document.getElementById('messagesContainer').innerHTML = '';
+                document.getElementById('typingIndicator').style.display = 'none';
+                document.getElementById('typingIndicator').textContent = '';
+            }
 
-           displayChatHistory(messages) {
+            // Open group chat
+            async openGroupChat(group) {
+                try {
+                    currentGroupId = group.id;
+                    currentChatUser = null; // Clear private chat
+                    
+                    // Update UI
+                    document.getElementById('noChatSelected').style.display = 'none';
+                    document.getElementById('chatInterface').style.display = 'flex';
+                    document.getElementById('chatWithUser').textContent = `${group.name} (Group)`;
+                    
+                    // Clear existing messages
+                    document.getElementById('messagesContainer').innerHTML = '';
+                    
+                    // Load group details and messages
+                    await loadGroupDetails(group.id);
+                    await loadGroupMessages(group.id);
+                    
+                    // Join group room for real-time updates
+                    socket.emit('joinGroupRoom', { groupId: group.id });
+                    
+                    console.log('Opened group chat:', group.name);
+                } catch (error) {
+                    console.error('Error opening group chat:', error);
+                }
+            }
+
+            // Load group details and members
+            async loadGroupDetails(groupId) {
+                try {
+                    const response = await fetch(`https://orion-2.onrender.com/api/groups/${groupId}`);
+                    const data = await response.json();
+                    
+                    if (data.group && data.members) {
+                        groupMembers[groupId] = data.members;
+                        // You can display member list in a sidebar or modal if needed
+                        console.log('Group members loaded:', data.members);
+                    }
+                } catch (error) {
+                    console.error('Error loading group details:', error);
+                }
+            }
+
+            // Load group messages
+            async loadGroupMessages(groupId) {
+                try {
+                    const response = await fetch(`https://orion-2.onrender.com/api/groups/${groupId}/messages`);
+                    const data = await response.json();
+                    
+                    if (data.messages) {
+                        displayGroupMessages(data.messages);
+                    }
+                } catch (error) {
+                    console.error('Error loading group messages:', error);
+                }
+            }
+
+            // Display group messages
+           displayGroupMessages(messages) {
+                const container = document.getElementById('messagesContainer');
+                container.innerHTML = '';
+                
+                messages.forEach(message => {
+                    const messageDiv = document.createElement('div');
+                    messageDiv.className = `message ${message.sender_id === currentUserId ? 'own-message' : 'other-message'}`;
+                    
+                    const time = new Date(message.sent_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+                    
+                    messageDiv.innerHTML = `
+                        <div class="message-header">
+                            <span class="message-sender">${escapeHtml(message.sender_username)}</span>
+                            <span class="message-time">${time}</span>
+                        </div>
+                        <div class="message-content">${escapeHtml(message.content)}</div>
+                    `;
+                    
+                    container.appendChild(messageDiv);
+                });
+                
+                container.scrollTop = container.scrollHeight;
+            }
+           
+            // Create group  
+            async createGroup(groupData) {
+                try {
+                    const response = await fetch('https://orion-2.onrender.com/api/groups', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify(groupData)
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (data.success) {
+                        // Reload groups list
+                        await loadUserGroups();
+                        
+                        // Join the new group room
+                        socket.emit('joinUserGroupRooms');
+                        
+                        return data.group;
+                    } else {
+                        throw new Error(data.error || 'Failed to create group');
+                    }
+                } catch (error) {
+                    console.error('Error creating group:', error);
+                    alert('Error creating group: ' + error.message);
+                    return null;
+                }
+            }
+
+            // Send group message
+            sendGroupMessage() {
+                const messageInput = document.getElementById('messageInput');
+                const message = messageInput.value.trim();
+                
+                if (!message || !currentGroupId) return;
+                
+                // Emit group message
+                socket.emit('groupMessage', {
+                    groupId: currentGroupId,
+                    message: message,
+                    timestamp: new Date()
+                });
+                
+                messageInput.value = '';
+            }
+
+            displayChatHistory(messages) {
                 const container = document.getElementById('messagesContainer');
                 container.innerHTML = '';
                 
@@ -1138,6 +1753,127 @@
     this.scrollToBottom();
 }
 
+            //Group Section Code
+            // Load and display public groups
+            async loadPublicGroups() {
+                try {
+                    const response = await fetch('https://orion-2.onrender.com/api/groups/public');
+                    const data = await response.json();
+                    
+                    if (data.groups) {
+                        displayPublicGroups(data.groups);
+                    }
+                } catch (error) {
+                    console.error('Error loading public groups:', error);
+                }
+            }
+
+
+            // Display public groups (you can add this to a discovery section)
+            displayPublicGroups(groups) {
+                // You can implement this to show public groups in a separate section
+                console.log('Public groups:', groups);
+            }
+            // Join public group
+            async joinPublicGroup(groupId) {
+                try {
+                    const response = await fetch(`https://orion-2.onrender.com/api/groups/${groupId}/join`, {
+                        method: 'POST'
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (data.success) {
+                        // Reload user groups
+                        await loadUserGroups();
+                        
+                        // Join group rooms
+                        socket.emit('joinUserGroupRooms');
+                        
+                        alert('Successfully joined group!');
+                    } else {
+                        alert('Error joining group: ' + data.error);
+                    }
+                } catch (error) {
+                    console.error('Error joining group:', error);
+                    alert('Error joining group');
+                }
+            }
+            
+
+            async leaveGroup(groupId) {
+                try {
+                    const response = await fetch(`/api/groups/${groupId}/leave`, {
+                        method: 'DELETE'
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (data.success) {
+                        // Remove from local groups list
+                        userGroups = userGroups.filter(g => g.id !== groupId);
+                        displayUserGroups();
+                        
+                        // If currently viewing this group, close it
+                        if (currentGroupId === groupId) {
+                            document.getElementById('noChatSelected').style.display = 'block';
+                            document.getElementById('chatInterface').style.display = 'none';
+                            clearCurrentChat();
+                        }
+                        
+                        alert('Successfully left group');
+                    } else {
+                        alert('Error leaving group: ' + data.error);
+                    }
+                } catch (error) {
+                    console.error('Error leaving group:', error);
+                    alert('Error leaving group');
+                }
+            }
+
+            addGroupContextMenu() {
+                document.addEventListener('contextmenu', (e) => {
+                    const groupItem = e.target.closest('.group-item');
+                    if (groupItem) {
+                        e.preventDefault();
+                        
+                        // Create context menu
+                        const contextMenu = document.createElement('div');
+                        contextMenu.className = 'context-menu';
+                        contextMenu.style.cssText = `
+                            position: fixed;
+                            top: ${e.clientY}px;
+                            left: ${e.clientX}px;
+                            background: white;
+                            border: 1px solid #ccc;
+                            border-radius: 4px;
+                            padding: 8px 0;
+                            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+                            z-index: 1000;
+                        `;
+                        
+                        contextMenu.innerHTML = `
+                            <div class="context-menu-item" style="padding: 8px 16px; cursor: pointer;">
+                                Group Info
+                            </div>
+                            <div class="context-menu-item" style="padding: 8px 16px; cursor: pointer; color: red;">
+                                Leave Group
+                            </div>
+                        `;
+                        
+                        document.body.appendChild(contextMenu);
+                        
+                        // Remove context menu when clicking elsewhere
+                        setTimeout(() => {
+                            document.addEventListener('click', () => {
+                                if (contextMenu.parentNode) {
+                                    contextMenu.parentNode.removeChild(contextMenu);
+                                }
+                            }, { once: true });
+                        }, 100);
+                    }
+                });
+            }
             // Helper method to extract timestamp from message object
             getTimestamp(message) {
                 // Handle various timestamp formats your app might use

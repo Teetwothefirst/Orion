@@ -4,7 +4,7 @@
   "main": "chat.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "node claude4.js.js",
+    "start": "node claude4.js",
     "dev": "nodemon claude4.js"
   },
   "keywords": [],

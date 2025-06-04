@@ -1169,7 +1169,7 @@
                         // this.sendMessage();
                         if (this.currentGroupId) {
                             sendGroupMessage();
-                        } else if (currentChatUser) {
+                        } else if (this.currentChatUser) {
                             sendMessage(); // Your existing private message function
                         }
                     } else {
@@ -1180,7 +1180,7 @@
                     // this.sendMessage()
                     if (this.currentGroupId) {
                         sendGroupMessage();
-                    } else if (currentChatUser) {
+                    } else if (this.currentChatUser) {
                         sendMessage(); // Your existing private message function
                     }
                 });

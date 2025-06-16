@@ -1174,7 +1174,7 @@
                     isTyping: false
                 });
             }
-            
+
             setupEventListeners() {
                 // Auth form handlers
                 document.getElementById('loginFormElement').addEventListener('submit', (e) => this.handleLogin(e));
@@ -1190,7 +1190,7 @@
                         if (this.currentGroupId) {
                             sendGroupMessage();
                         } else if (this.currentChatUser) {
-                            sendMessage(); // Your existing private message function
+                            this.sendMessage(); // Your existing private message function
                         }
                     } else {
                         this.handleTyping();

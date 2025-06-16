@@ -781,6 +781,7 @@ app.get('/api/messages/:targetUserId', async (req, res) => {
 
 // GROUP MANAGEMENT ROUTES
 // Create a new group
+
 app.post('/api/groups', async (req, res) => {
   try {
     if (!req.session.userId) {

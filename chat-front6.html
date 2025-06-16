@@ -1154,7 +1154,27 @@
                 this.setupEventListeners();
                 this.checkExistingSession();
             }
+               sendMessage() {
+                const input = document.getElementById('messageInput');
+                const message = input.value.trim();
 
+                if (!message || !this.currentChatUser) return;
+
+                this.socket.emit('privateMessage', {
+                    targetUserId: this.currentChatUser.id,
+                    message: message,
+                    timestamp: new Date()
+                });
+
+                input.value = '';
+                
+                // Stop typing indicator
+                this.socket.emit('typing', {
+                    targetUserId: this.currentChatUser.id,
+                    isTyping: false
+                });
+            }
+            
             setupEventListeners() {
                 // Auth form handlers
                 document.getElementById('loginFormElement').addEventListener('submit', (e) => this.handleLogin(e));
@@ -1937,26 +1957,6 @@
                 }
             }
 
-            sendMessage() {
-                const input = document.getElementById('messageInput');
-                const message = input.value.trim();
-
-                if (!message || !this.currentChatUser) return;
-
-                this.socket.emit('privateMessage', {
-                    targetUserId: this.currentChatUser.id,
-                    message: message,
-                    timestamp: new Date()
-                });
-
-                input.value = '';
-                
-                // Stop typing indicator
-                this.socket.emit('typing', {
-                    targetUserId: this.currentChatUser.id,
-                    isTyping: false
-                });
-            }
 
             handleTyping() {
                 if (!this.currentChatUser) return;

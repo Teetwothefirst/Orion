@@ -36,6 +36,10 @@ body {
             justify-content: center;
             padding: 40px;
         }
+        .auth-form-img{
+            display: flex;
+            justify-content: center;
+        }
         .auth-form {
             background: white;
             padding: 40px;

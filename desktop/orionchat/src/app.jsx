@@ -1,5 +1,6 @@
 import * as React from 'react';
 import Chat from './components/Chat.jsx';
+import Signup from './components/Signup.jsx';
 import * as ReactDOM from "react-dom/client";
 import { createRoot } from 'react-dom/client';
 import {
@@ -23,4 +24,4 @@ const router = createBrowserRouter([
 //   </React.StrictMode>
 // );
 const root = createRoot(document.body);
-root.render(<h2><Chat /></h2>);
+root.render(<div className='container'><Signup /></div>);

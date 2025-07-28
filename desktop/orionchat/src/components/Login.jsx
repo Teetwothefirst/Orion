@@ -1,4 +1,5 @@
 import React from 'react'
+import {Link} from 'react-router-dom'
 // import EAL from '../assets/EAL.jpg'
 
 export default function Login() {
@@ -30,6 +31,7 @@ export default function Login() {
                         <input type="password" id="loginPassword" name="password" required />
                     </div>
                     <button type="submit" className="btn">Login</button>
+                    <Link to={`/chat`} className='btn'>Next</Link>
                 </form>
                 <div className="auth-switch">
                     Don't have an account? <a href="#" id="switchToRegister">Register here</a>

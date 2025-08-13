@@ -3,6 +3,7 @@ import Chat from './components/Chat.jsx';
 import Signup from './components/Signup.jsx';
 import * as ReactDOM from "react-dom/client";
 // import { createRoot } from 'react-dom/client';
+import ChatInterface from './components/ChatInterface.jsx';
 import {
   createBrowserRouter,
   RouterProvider,
@@ -35,7 +36,7 @@ ReactDOM.createRoot(document.getElementById("root")).render(
         <Routes>
           <Route path="/" element={<Login />} />
           <Route path='/signup' element={<Signup />} />
-          <Route path='/chat' element={<Chat />} />
+          <Route path='/chat' element={<ChatInterface />} />
           {/* <Route path='/forgotPassword' element={<ForgotPassword />} />
           <Route path='/resetPassword' element={<ResetPassword />} /> */}
         </Routes>

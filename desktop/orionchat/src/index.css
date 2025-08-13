@@ -1,3 +1,7 @@
+/* @import "tailwindcss"; */
+
+
+
 body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica,
     Arial, sans-serif;
@@ -95,7 +99,11 @@ body {
         .btn:hover {
             opacity: 0.9;
         }
-
+        .btn-login{
+            display:block;
+            text-align: center;
+            text-decoration: none;
+        }
         .auth-switch {
             text-align: center;
             margin-top: 20px;
@@ -116,7 +124,7 @@ body {
         }
 
         .sidebar {
-            width: 300px;
+            width: 400px;
             background: #f8f9fa;
             border-right: 1px solid #e1e1e1;
             display: flex;

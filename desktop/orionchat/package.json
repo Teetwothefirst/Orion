@@ -37,10 +37,13 @@
     "style-loader": "^3.3.4"
   },
   "dependencies": {
+    "@tailwindcss/cli": "^4.1.11",
     "electron-squirrel-startup": "^1.0.1",
     "file-loader": "^6.2.0",
+    "lucide-react": "^0.539.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
-    "react-router-dom": "^7.6.3"
+    "react-router-dom": "^7.6.3",
+    "tailwindcss": "^4.1.11"
   }
 }

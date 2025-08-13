@@ -18,9 +18,8 @@ export default function Login() {
                     <h2>Login to Chat</h2>
                 {/* <!-- </div> --> */}
                 
-                <div id="loginError" className="error-message">
-                    {/* style="display: none;" */}
-                </div>
+                {/* <div id="loginError" className="error-message" style="display: none">
+                </div> */}
                 <form id="loginFormElement">
                     <div className="form-group">
                         <label for="loginUsername">Username</label>
@@ -30,8 +29,8 @@ export default function Login() {
                         <label for="loginPassword">Password</label>
                         <input type="password" id="loginPassword" name="password" required />
                     </div>
-                    <button type="submit" className="btn">Login</button>
-                    <Link to={`/chat`} className='btn'>Next</Link>
+                    {/* <button type="submit" className="btn">Login</button> */}
+                    <Link to={`/chat`} className='btn btn-login'>Next</Link>
                 </form>
                 <div className="auth-switch">
                     Don't have an account? <a href="#" id="switchToRegister">Register here</a>

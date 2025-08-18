@@ -12,6 +12,7 @@ import {
   Route
 } from "react-router-dom";
 import Login from './components/Login.jsx'
+import Auth from './components/Auth.jsx';
 
 
 
@@ -34,7 +35,7 @@ ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
       <HashRouter>
         <Routes>
-          <Route path="/" element={<Login />} />
+          <Route path="/" element={<Auth />} />
           <Route path='/signup' element={<Signup />} />
           <Route path='/chat' element={<ChatInterface />} />
           {/* <Route path='/forgotPassword' element={<ForgotPassword />} />

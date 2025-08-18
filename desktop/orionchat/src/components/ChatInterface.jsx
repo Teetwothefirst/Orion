@@ -124,7 +124,13 @@ const ChatInterface = () => {
         </div> */}
         <div>
             <div style={styles.logout}><p>So sad to see you go</p>
-            <Link to={`/`} className='btn btn-login'>Next</Link>
+            <Link to={`/`} className='btn btn-login' style={{
+              background: 'red',
+              padding: '5px',
+              color: 'white',
+              textDecoration: 'none',
+              borderRadius: '10px'
+            }}>Logout</Link>
             </div>
         </div>
       </div>

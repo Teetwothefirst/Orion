@@ -1,6 +1,6 @@
 {
-  "name": "orionchat",
-  "productName": "orionchat",
+  "name": "orion",
+  "productName": "orion",
   "version": "1.0.0",
   "description": "My Electron application description",
   "main": ".webpack/main",
@@ -13,35 +13,34 @@
   },
   "keywords": [],
   "author": {
-    "name": "Teetwothefirst",
+    "name": "Teetwo",
     "email": "dexterdavid835@gmail.com"
   },
   "license": "MIT",
   "devDependencies": {
-    "@babel/core": "^7.27.7",
+    "@babel/core": "^7.28.3",
     "@babel/preset-react": "^7.27.1",
-    "@electron-forge/cli": "^7.8.1",
-    "@electron-forge/maker-deb": "^7.8.1",
-    "@electron-forge/maker-rpm": "^7.8.1",
-    "@electron-forge/maker-squirrel": "^7.8.1",
-    "@electron-forge/maker-zip": "^7.8.1",
-    "@electron-forge/plugin-auto-unpack-natives": "^7.8.1",
-    "@electron-forge/plugin-fuses": "^7.8.1",
-    "@electron-forge/plugin-webpack": "^7.8.1",
+    "@electron-forge/cli": "^7.8.3",
+    "@electron-forge/maker-deb": "^7.8.3",
+    "@electron-forge/maker-rpm": "^7.8.3",
+    "@electron-forge/maker-squirrel": "^7.8.3",
+    "@electron-forge/maker-zip": "^7.8.3",
+    "@electron-forge/plugin-auto-unpack-natives": "^7.8.3",
+    "@electron-forge/plugin-fuses": "^7.8.3",
+    "@electron-forge/plugin-webpack": "^7.8.3",
     "@electron/fuses": "^1.8.0",
     "@vercel/webpack-asset-relocator-loader": "^1.7.3",
     "babel-loader": "^10.0.0",
     "css-loader": "^6.11.0",
-    "electron": "37.1.0",
+    "electron": "^37.3.1",
     "node-loader": "^2.1.0",
     "style-loader": "^3.3.4"
   },
   "dependencies": {
     "electron-squirrel-startup": "^1.0.1",
-    "file-loader": "^6.2.0",
-    "lucide-react": "^0.539.0",
-    "react": "^19.1.0",
-    "react-dom": "^19.1.0",
-    "react-router-dom": "^7.6.3"
+    "lucide-react": "^0.540.0",
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1",
+    "react-router-dom": "^7.8.1"
   }
 }

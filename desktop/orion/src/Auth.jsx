@@ -43,7 +43,7 @@ const Logo = () => (
       color: 'white',
       fontWeight: 'bold'
     }}>
-      L
+      O
     </div>
     <h1 style={{
       fontSize: '28px',
@@ -51,7 +51,7 @@ const Logo = () => (
       color: '#1a1a1a',
       margin: '0 0 8px 0'
     }}>
-      Logoipsum
+      Orion Chat
     </h1>
     <p style={{
       color: '#666',

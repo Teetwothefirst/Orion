@@ -58,7 +58,7 @@ const Logo = () => (
       fontSize: '16px',
       margin: 0
     }}>
-      Connect with your team
+      Connect with your Team & More
     </p>
   </div>
 );

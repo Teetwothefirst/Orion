@@ -1,5 +1,5 @@
-import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, Dimensions } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, Dimensions, TextInput, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { FontAwesome } from '@expo/vector-icons';
 
@@ -8,14 +8,28 @@ const { width } = Dimensions.get('window');
 interface LoginScreenProps {
   onLoginWithGoogle?: () => void;
   onLoginWithPasskey?: () => void;
-  onLoginWithEmail?: () => void;
+  onLoginWithEmail?: (email: string, password: string, isRegister: boolean, username?: string) => void;
+  isLoading?: boolean;
 }
 
 export default function LoginScreen({
   onLoginWithGoogle,
   onLoginWithPasskey,
   onLoginWithEmail,
+  isLoading
 }: LoginScreenProps) {
+  const [showEmailInput, setShowEmailInput] = useState(false);
+  const [isRegister, setIsRegister] = useState(false);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [username, setUsername] = useState('');
+
+  const handleEmailSubmit = () => {
+    if (onLoginWithEmail) {
+      onLoginWithEmail(email, password, isRegister, username);
+    }
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.content}>
@@ -24,26 +38,78 @@ export default function LoginScreen({
           <View style={styles.iconContainer}>
             <Ionicons name="bulb-outline" size={60} color="white" />
           </View>
-          <Text style={styles.title}>Login</Text>
-          <Text style={styles.subtitle}>Welcome back, please sign in</Text>
+          <Text style={styles.title}>{isRegister ? 'Create Account' : 'Login'}</Text>
+          <Text style={styles.subtitle}>{isRegister ? 'Sign up to get started' : 'Welcome back, please sign in'}</Text>
         </View>
 
         {/* Buttons Section */}
         <View style={styles.buttonContainer}>
-          <TouchableOpacity style={styles.googleButton} onPress={onLoginWithGoogle}>
-            <FontAwesome name="google" size={20} color="black" style={styles.buttonIcon} />
-            <Text style={styles.googleButtonText}>Continue with Google</Text>
-          </TouchableOpacity>
+          {!showEmailInput ? (
+            <>
+              <TouchableOpacity style={styles.googleButton} onPress={onLoginWithGoogle}>
+                <FontAwesome name="google" size={20} color="black" style={styles.buttonIcon} />
+                <Text style={styles.googleButtonText}>Continue with Google</Text>
+              </TouchableOpacity>
 
-          <TouchableOpacity style={styles.secondaryButton} onPress={onLoginWithPasskey}>
-             <Ionicons name="key-outline" size={20} color="white" style={styles.buttonIcon} />
-            <Text style={styles.secondaryButtonText}>Continue with Passkey</Text>
-          </TouchableOpacity>
+              <TouchableOpacity style={styles.secondaryButton} onPress={onLoginWithPasskey}>
+                <Ionicons name="key-outline" size={20} color="white" style={styles.buttonIcon} />
+                <Text style={styles.secondaryButtonText}>Continue with Passkey</Text>
+              </TouchableOpacity>
 
-           <TouchableOpacity style={styles.secondaryButton} onPress={onLoginWithEmail}>
-            <Ionicons name="mail-outline" size={20} color="white" style={styles.buttonIcon} />
-            <Text style={styles.secondaryButtonText}>Continue with Email</Text>
-          </TouchableOpacity>
+              <TouchableOpacity style={styles.secondaryButton} onPress={() => setShowEmailInput(true)}>
+                <Ionicons name="mail-outline" size={20} color="white" style={styles.buttonIcon} />
+                <Text style={styles.secondaryButtonText}>Continue with Email</Text>
+              </TouchableOpacity>
+            </>
+          ) : (
+            <>
+              {isRegister && (
+                <TextInput
+                  style={styles.input}
+                  placeholder="Username"
+                  placeholderTextColor="#666"
+                  value={username}
+                  onChangeText={setUsername}
+                  autoCapitalize="none"
+                />
+              )}
+              <TextInput
+                style={styles.input}
+                placeholder="Email"
+                placeholderTextColor="#666"
+                value={email}
+                onChangeText={setEmail}
+                keyboardType="email-address"
+                autoCapitalize="none"
+              />
+              <TextInput
+                style={styles.input}
+                placeholder="Password"
+                placeholderTextColor="#666"
+                value={password}
+                onChangeText={setPassword}
+                secureTextEntry
+              />
+
+              <TouchableOpacity style={styles.googleButton} onPress={handleEmailSubmit} disabled={isLoading}>
+                {isLoading ? (
+                  <ActivityIndicator color="black" />
+                ) : (
+                  <Text style={styles.googleButtonText}>{isRegister ? 'Sign Up' : 'Login'}</Text>
+                )}
+              </TouchableOpacity>
+
+              <TouchableOpacity onPress={() => setIsRegister(!isRegister)} style={styles.switchButton}>
+                <Text style={styles.switchText}>
+                  {isRegister ? 'Already have an account? Login' : "Don't have an account? Sign Up"}
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity onPress={() => setShowEmailInput(false)} style={styles.backButton}>
+                <Text style={styles.backButtonText}>Back to options</Text>
+              </TouchableOpacity>
+            </>
+          )}
         </View>
       </View>
     </SafeAreaView>
@@ -117,4 +183,29 @@ const styles = StyleSheet.create({
   buttonIcon: {
     marginRight: 10,
   },
+  input: {
+    backgroundColor: '#1E1E1E',
+    borderRadius: 12,
+    padding: 16,
+    fontSize: 16,
+    color: 'white',
+    borderWidth: 1,
+    borderColor: '#333',
+  },
+  switchButton: {
+    alignItems: 'center',
+    marginTop: 10,
+  },
+  switchText: {
+    color: '#007AFF',
+    fontSize: 14,
+  },
+  backButton: {
+    alignItems: 'center',
+    marginTop: 10,
+  },
+  backButtonText: {
+    color: '#666',
+    fontSize: 14,
+  }
 });

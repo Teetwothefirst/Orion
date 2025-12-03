@@ -1,34 +1,47 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, Image, SafeAreaView, Dimensions } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, Image, SafeAreaView, Dimensions, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-// import { LinearGradient } from 'expo-linear-gradient'; // For nice gradients if needed, or just colors
+import { useAuth } from '@/context/AuthContext';
+import { api } from '@/services/api';
 
 const { width } = Dimensions.get('window');
 
-// Mock Data
-const CHAT_ROOMS = [
-    { id: '1', title: 'Adeniji', description: 'Football Group' },
-    { id: '2', title: 'My second chat room', description: 'Minimum description of second room' },
-    { id: '3', title: 'My third chat room', description: 'Minimum description of third room' },
-];
-
-const GROUPS_DATA = [
-    { id: 'g1', title: 'Project Alpha', description: 'Work updates' },
-    { id: 'g2', title: 'Weekend Trip', description: 'Planning for the trip' },
-];
-
 export default function ChatListScreen() {
     const [activeTab, setActiveTab] = useState<'chat' | 'group'>('chat');
+    const [chats, setChats] = useState<any[]>([]);
+    const [loading, setLoading] = useState(true);
     const router = useRouter();
+    const { user } = useAuth();
 
-    const data = activeTab === 'chat' ? CHAT_ROOMS : GROUPS_DATA;
+    useEffect(() => {
+        if (user) {
+            fetchChats();
+        }
+    }, [user]);
 
-    const renderItem = ({ item }: { item: typeof CHAT_ROOMS[0] }) => (
-        <TouchableOpacity style={styles.chatItem}>
+    const fetchChats = async () => {
+        try {
+            const response = await api.get(`/chats?userId=${user?.id}`);
+            setChats(response.data);
+        } catch (error) {
+            console.error('Error fetching chats:', error);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleChatPress = (chatId: string) => {
+        router.push(`/chat/${chatId}`);
+    };
+
+    const renderItem = ({ item }: { item: any }) => (
+        <TouchableOpacity style={styles.chatItem} onPress={() => handleChatPress(item.id)}>
             <View style={styles.chatInfo}>
-                <Text style={styles.chatTitle}>{item.title}</Text>
-                <Text style={styles.chatDesc}>{item.description}</Text>
+                <Text style={styles.chatTitle}>{item.name}</Text>
+                <Text style={styles.chatDesc} numberOfLines={1}>
+                    {item.last_message || 'No messages yet'}
+                </Text>
             </View>
             <Ionicons name="chevron-forward" size={20} color="#666" />
         </TouchableOpacity>
@@ -40,7 +53,7 @@ export default function ChatListScreen() {
             <View style={styles.header}>
                 <TouchableOpacity onPress={() => router.push('/settings')}>
                     <Image
-                        source={{ uri: 'https://i.pravatar.cc/100' }} // Placeholder avatar
+                        source={{ uri: user?.avatar || 'https://i.pravatar.cc/100' }}
                         style={styles.avatar}
                     />
                 </TouchableOpacity>
@@ -51,17 +64,23 @@ export default function ChatListScreen() {
             </View>
 
             {/* Chat List */}
-            <FlatList
-                data={data}
-                renderItem={renderItem}
-                keyExtractor={(item) => item.id}
-                contentContainerStyle={styles.listContent}
-                ListEmptyComponent={
-                    <View style={styles.emptyState}>
-                        <Text style={styles.emptyText}>No {activeTab === 'chat' ? 'chat rooms' : 'groups'} yet</Text>
-                    </View>
-                }
-            />
+            {loading ? (
+                <View style={styles.loadingContainer}>
+                    <ActivityIndicator size="large" color="#007AFF" />
+                </View>
+            ) : (
+                <FlatList
+                    data={chats}
+                    renderItem={renderItem}
+                    keyExtractor={(item) => item.id.toString()}
+                    contentContainerStyle={styles.listContent}
+                    ListEmptyComponent={
+                        <View style={styles.emptyState}>
+                            <Text style={styles.emptyText}>No {activeTab === 'chat' ? 'chat rooms' : 'groups'} yet</Text>
+                        </View>
+                    }
+                />
+            )}
 
             {/* Liquid Glass Toggle */}
             <View style={styles.toggleContainer}>
@@ -146,6 +165,11 @@ const styles = StyleSheet.create({
     emptyText: {
         color: '#666',
         fontSize: 16,
+    },
+    loadingContainer: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
     },
 
     // Toggle Styles

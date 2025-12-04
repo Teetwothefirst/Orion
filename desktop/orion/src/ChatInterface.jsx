@@ -825,131 +825,131 @@ const styles = {
     fontSize: '24px',
     cursor: 'pointer',
     transition: 'transform 0.2s'
-  }
-};
-
-// Add hover effects
-const originalNavItem = styles.navItem;
-styles.navItem = {
-  ...originalNavItem,
-  ':hover': {
-    backgroundColor: '#f9fafb'
-  }
-};
-
-const originalContactItem = styles.contactItem;
-styles.contactItem = {
-  ...originalContactItem,
-  ':hover': {
-    backgroundColor: '#f9fafb'
-  }
-};
-
-const originalSendButton = styles.sendButton;
-styles.sendButton = {
-  ...originalSendButton,
-  ':hover': {
-    backgroundColor: '#2563eb'
-  }
-};
-
-const originalPhotoItem = styles.photoItem;
-styles.photoItem = {
-  ...originalPhotoItem,
-  ':hover': {
-    transform: 'scale(1.05)'
-  }
-  ,
+  },
   modalOverlay: {
     position: 'fixed',
     top: 0,
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: 'rgba(0, 0, 0, 0.4)',
+    backdropFilter: 'blur(8px)',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    zIndex: 1000
+    zIndex: 1000,
+    padding: '20px'
   },
   modalContent: {
-    backgroundColor: 'white',
-    borderRadius: '16px',
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    borderRadius: '24px',
     padding: '24px',
-    width: '90%',
-    maxWidth: '500px',
-    maxHeight: '80vh',
-    overflow: 'hidden',
+    width: '100%',
+    maxWidth: '480px',
+    maxHeight: '85vh',
     display: 'flex',
-    flexDirection: 'column'
+    flexDirection: 'column',
+    boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+    border: '1px solid rgba(255, 255, 255, 0.5)'
   },
   modalHeader: {
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: '20px'
+    marginBottom: '24px',
+    flexShrink: 0
   },
   modalTitle: {
-    fontSize: '24px',
-    fontWeight: '600',
-    color: '#1f2937',
-    margin: 0
+    fontSize: '20px',
+    fontWeight: '700',
+    color: '#111827',
+    margin: 0,
+    letterSpacing: '-0.025em'
   },
   searchInput: {
     width: '100%',
-    padding: '12px 16px',
-    border: '2px solid #e5e7eb',
-    borderRadius: '12px',
-    fontSize: '16px',
+    padding: '14px 16px',
+    border: '2px solid transparent',
+    backgroundColor: '#f3f4f6',
+    borderRadius: '16px',
+    fontSize: '15px',
     outline: 'none',
-    marginBottom: '16px',
-    boxSizing: 'border-box'
+    marginBottom: '20px',
+    boxSizing: 'border-box',
+    transition: 'all 0.2s',
+    flexShrink: 0,
+    ':focus': {
+      backgroundColor: 'white',
+      borderColor: '#3b82f6',
+      boxShadow: '0 0 0 4px rgba(59, 130, 246, 0.1)'
+    }
   },
   userList: {
     flex: 1,
     overflowY: 'auto',
     display: 'flex',
     flexDirection: 'column',
-    gap: '8px'
+    gap: '8px',
+    paddingRight: '4px',
+    minHeight: 0
   },
   userItem: {
     display: 'flex',
     alignItems: 'center',
     padding: '12px',
-    borderRadius: '12px',
+    borderRadius: '16px',
     cursor: 'pointer',
-    transition: 'background-color 0.2s',
-    backgroundColor: '#f9fafb'
+    transition: 'all 0.2s',
+    backgroundColor: 'transparent',
+    border: '1px solid transparent',
+    ':hover': {
+      backgroundColor: '#f8fafc',
+      borderColor: '#e2e8f0',
+      transform: 'translateY(-1px)'
+    }
   },
   userItemAvatar: {
-    width: '48px',
-    height: '48px',
+    width: '44px',
+    height: '44px',
     borderRadius: '50%',
-    backgroundColor: '#e5e7eb',
+    backgroundColor: '#e0e7ff',
+    color: '#4f46e5',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    fontSize: '24px',
-    marginRight: '12px'
+    fontSize: '20px',
+    marginRight: '16px',
+    flexShrink: 0
   },
   userItemInfo: {
-    flex: 1
+    flex: 1,
+    minWidth: 0
   },
   userItemName: {
-    fontSize: '16px',
-    fontWeight: '500',
+    fontSize: '15px',
+    fontWeight: '600',
     color: '#1f2937',
-    margin: '0 0 4px 0'
+    margin: '0 0 2px 0',
+    whiteSpace: 'nowrap',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis'
   },
   userItemEmail: {
-    fontSize: '14px',
+    fontSize: '13px',
     color: '#6b7280',
-    margin: 0
+    margin: 0,
+    whiteSpace: 'nowrap',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis'
   },
   emptyState: {
     textAlign: 'center',
-    padding: '40px',
-    color: '#9ca3af'
+    padding: '48px 20px',
+    color: '#9ca3af',
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    gap: '12px'
   },
   profileContent: {
     display: 'flex',
@@ -996,7 +996,39 @@ styles.photoItem = {
     color: 'white',
     transition: 'transform 0.2s'
   }
+};
 
+// Add hover effects
+const originalNavItem = styles.navItem;
+styles.navItem = {
+  ...originalNavItem,
+  ':hover': {
+    backgroundColor: '#f9fafb'
+  }
+};
+
+const originalContactItem = styles.contactItem;
+styles.contactItem = {
+  ...originalContactItem,
+  ':hover': {
+    backgroundColor: '#f9fafb'
+  }
+};
+
+const originalSendButton = styles.sendButton;
+styles.sendButton = {
+  ...originalSendButton,
+  ':hover': {
+    backgroundColor: '#2563eb'
+  }
+};
+
+const originalPhotoItem = styles.photoItem;
+styles.photoItem = {
+  ...originalPhotoItem,
+  ':hover': {
+    transform: 'scale(1.05)'
+  }
 };
 
 export default ChatInterface;

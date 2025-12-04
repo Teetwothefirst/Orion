@@ -15,6 +15,10 @@ router.post('/register', (req, res) => {
         [username, email, hashedPassword],
         function (err) {
             if (err) {
+                console.log('Registration Error:', err);
+                if (err.message.includes('SQLITE_CONSTRAINT') || err.code === 'SQLITE_CONSTRAINT') {
+                    return res.status(409).send("Username or email already exists.");
+                }
                 return res.status(500).send("There was a problem registering the user.");
             }
             const token = jwt.sign({ id: this.lastID }, JWT_SECRET, { expiresIn: 86400 });

@@ -32,7 +32,7 @@ export default function ChatListScreen() {
     };
 
     const handleChatPress = (chatId: string) => {
-        router.push(`/chat/${chatId}`);
+        router.push(`/chat/${chatId}` as any);
     };
 
     const renderItem = ({ item }: { item: any }) => (

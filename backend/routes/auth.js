@@ -39,4 +39,22 @@ router.post('/login', (req, res) => {
     });
 });
 
+// Get all users (except current user)
+router.get('/users', (req, res) => {
+    const currentUserId = req.query.currentUserId;
+
+    let sql = `SELECT id, username, email, avatar FROM users`;
+    let params = [];
+
+    if (currentUserId) {
+        sql += ` WHERE id != ?`;
+        params.push(currentUserId);
+    }
+
+    db.all(sql, params, (err, users) => {
+        if (err) return res.status(500).send("Error retrieving users.");
+        res.status(200).send(users);
+    });
+});
+
 module.exports = router;

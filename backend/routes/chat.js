@@ -7,8 +7,19 @@ const router = express.Router();
 router.get('/', (req, res) => {
     const userId = req.query.userId;
 
+    //     SELECT c.*, 
     const sql = `
-        SELECT c.*, 
+        SELECT c.id, c.type, c.updated_at,
+               CASE 
+                   WHEN c.type = 'private' THEN (
+                       SELECT u.username 
+                       FROM users u 
+                       JOIN chat_participants cp2 ON u.id = cp2.user_id 
+                       WHERE cp2.chat_id = c.id AND u.id != ?
+                       LIMIT 1
+                   )
+                   ELSE c.name 
+               END as name,
                (SELECT content FROM messages WHERE chat_id = c.id ORDER BY created_at DESC LIMIT 1) as last_message,
                (SELECT created_at FROM messages WHERE chat_id = c.id ORDER BY created_at DESC LIMIT 1) as last_message_time
         FROM chats c
@@ -17,8 +28,12 @@ router.get('/', (req, res) => {
         ORDER BY last_message_time DESC
     `;
 
-    db.all(sql, [userId], (err, chats) => {
-        if (err) return res.status(500).send("Error retrieving chats.");
+    // db.all(sql, [userId], (err, chats) => {
+    db.all(sql, [userId, userId], (err, chats) => {
+        if (err) {
+            console.error('Error retrieving chats:', err);
+            return res.status(500).send("Error retrieving chats.");
+        }
         res.status(200).send(chats);
     });
 });

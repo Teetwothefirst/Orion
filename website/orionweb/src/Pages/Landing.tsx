@@ -82,7 +82,7 @@ const Landing: React.FC = () => {
                         Experience seamless, secure, and instant communication. Crystal clear voice, HD video, and encryption that actually works.
                     </p>
 
-                    <div className="flex flex-col sm:flex-row justify-center gap-4 animate-in fade-in slide-in-from-bottom-10 duration-700 delay-300">
+                    <div className="flex flex-col sm:flex-row justify-center gap-4 animate-in fade-in text-white slide-in-from-bottom-10 duration-700 delay-300">
                         <a href="#download" className="group px-8 py-4 text-lg font-bold text-white bg-blue-600 rounded-xl hover:bg-blue-700 shadow-lg hover:shadow-blue-500/30 transition-all transform hover:-translate-y-1 flex items-center justify-center gap-2">
                             Get Started Free
                             <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" />
@@ -190,8 +190,8 @@ const Landing: React.FC = () => {
                         Download OrionChat for your preferred platform and sync your conversations across all devices instantly.
                     </p>
 
-                    <div className="flex flex-col md:flex-row justify-center gap-6">
-                        <div className="group p-8 bg-white rounded-3xl shadow-sm border border-gray-100 flex-1 max-w-sm mx-auto hover:-translate-y-2 transition-all duration-300 hover:shadow-xl">
+                    <div className="md:flex flex-row justify-center gap-6">
+                        <div className="mb-3 group p-8 bg-white rounded-3xl shadow-sm border border-gray-100 flex-1 max-w-sm mx-auto hover:-translate-y-2 transition-all duration-300 hover:shadow-xl">
                             <h3 className="text-2xl font-bold mb-2 text-gray-900">Mobile</h3>
                             <p className="text-gray-500 mb-8">iOS & Android</p>
                             <button className="w-full py-3.5 bg-gray-900 text-white rounded-xl font-bold hover:bg-gray-800 transition flex items-center justify-center gap-2 group-hover:shadow-lg">

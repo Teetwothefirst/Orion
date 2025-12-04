@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/context/AuthContext';
 import { api } from '@/services/api';
+import NewChatModal from './NewChatModal';
 
 const { width } = Dimensions.get('window');
 
@@ -11,6 +12,7 @@ export default function ChatListScreen() {
     const [activeTab, setActiveTab] = useState<'chat' | 'group'>('chat');
     const [chats, setChats] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
+    const [showNewChatModal, setShowNewChatModal] = useState(false);
     const router = useRouter();
     const { user } = useAuth();
 
@@ -33,6 +35,23 @@ export default function ChatListScreen() {
 
     const handleChatPress = (chatId: string) => {
         router.push(`/chat/${chatId}`);
+    };
+
+    const handleStartChat = async (selectedUser: any) => {
+        try {
+            const response = await api.post('/chats', {
+                userId: user?.id,
+                otherUserId: selectedUser.id
+            });
+
+            setShowNewChatModal(false);
+            fetchChats(); // Refresh list
+
+            // Navigate to the new chat
+            router.push(`/chat/${response.data.id}`);
+        } catch (error) {
+            console.error('Error creating chat:', error);
+        }
     };
 
     const renderItem = ({ item }: { item: any }) => (
@@ -58,7 +77,7 @@ export default function ChatListScreen() {
                     />
                 </TouchableOpacity>
                 <Text style={styles.headerTitle}>Orion</Text>
-                <TouchableOpacity>
+                <TouchableOpacity onPress={() => setShowNewChatModal(true)}>
                     <Ionicons name="add" size={28} color="#007AFF" />
                 </TouchableOpacity>
             </View>
@@ -103,6 +122,12 @@ export default function ChatListScreen() {
                     </TouchableOpacity>
                 </View>
             </View>
+
+            <NewChatModal
+                visible={showNewChatModal}
+                onClose={() => setShowNewChatModal(false)}
+                onUserSelect={handleStartChat}
+            />
         </SafeAreaView>
     );
 }

@@ -13,11 +13,28 @@ const createWindow = () => {
     height: 600,
     webPreferences: {
       preload: MAIN_WINDOW_PRELOAD_WEBPACK_ENTRY,
+      webSecurity: false, // Disable web security to allow API calls in development
+      nodeIntegration: false,
+      contextIsolation: true,
     },
   });
 
   // and load the index.html of the app.
   mainWindow.loadURL(MAIN_WINDOW_WEBPACK_ENTRY);
+
+  // Intercept and modify CSP headers to allow API connections
+  mainWindow.webContents.session.webRequest.onHeadersReceived((details, callback) => {
+    callback({
+      responseHeaders: {
+        ...details.responseHeaders,
+        'Content-Security-Policy': [
+          "default-src 'self' 'unsafe-inline' data:; " +
+          "connect-src 'self' http://127.0.0.1:3001 http://localhost:3001 ws://127.0.0.1:3001 ws://localhost:3001; " +
+          "script-src 'self' 'unsafe-inline' 'unsafe-eval';"
+        ]
+      }
+    });
+  });
 
   // Open the DevTools.
   mainWindow.webContents.openDevTools();

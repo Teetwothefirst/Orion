@@ -240,8 +240,7 @@ const LoginForm = ({ onSwitchToSignup, onSwitchToForgotPassword }) => {
 };
 
 const SignupForm = ({ onSwitchToLogin }) => {
-  const [firstName, setFirstName] = useState('');
-  const [lastName, setLastName] = useState('');
+  const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -249,12 +248,12 @@ const SignupForm = ({ onSwitchToLogin }) => {
   const navigate = useNavigate();
 
   const handleSubmit = async () => {
-    if (!firstName || !lastName || !email || !password || !confirmPassword) return;
+    if (!name || !email || !password || !confirmPassword) return;
     if (password !== confirmPassword) {
       alert('Passwords do not match!');
       return;
     }
-    const success = await register(firstName, lastName, email, password);
+    const success = await register(name, email, password);
     if (success) {
       navigate('/chat');
     }
@@ -289,22 +288,13 @@ const SignupForm = ({ onSwitchToLogin }) => {
           </div>
         )}
 
-        <div style={{ display: 'flex', gap: '12px', marginBottom: '16px' }}>
-          <Input
-            type="text"
-            placeholder="First name"
-            value={firstName}
-            onChange={(e) => setFirstName(e.target.value)}
-            required
-          />
-          <Input
-            type="text"
-            placeholder="Last name"
-            value={lastName}
-            onChange={(e) => setLastName(e.target.value)}
-            required
-          />
-        </div>
+        <Input
+          type="text"
+          placeholder="Full name"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          required
+        />
 
         <Input
           type="email"

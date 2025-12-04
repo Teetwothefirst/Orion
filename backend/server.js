@@ -5,6 +5,7 @@ const cors = require('cors');
 const db = require('./db');
 const authRoutes = require('./routes/auth');
 const chatRoutes = require('./routes/chat');
+const usersRoutes = require('./routes/users');
 const chatSocket = require('./sockets/chatSocket');
 
 const app = express();
@@ -22,13 +23,14 @@ app.use(express.json());
 // Routes
 app.use('/auth', authRoutes);
 app.use('/chats', chatRoutes);
+app.use('/users', usersRoutes);
 
 // Socket.io
 io.on('connection', (socket) => {
     chatSocket(io, socket);
 });
 
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 3001;
 
 server.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`);

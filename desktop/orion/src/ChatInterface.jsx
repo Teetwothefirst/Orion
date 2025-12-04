@@ -1,45 +1,110 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Search, MoreHorizontal, Send, Home, MessageCircle, Users, Heart, Bell } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
+import { useAuth } from './context/AuthContext.jsx';
+import { api, socket } from './services/api.js';
+
 const ChatInterface = () => {
-  const [selectedContact, setSelectedContact] = useState('Monalisa');
+  const [selectedContact, setSelectedContact] = useState(null);
   const [messageInput, setMessageInput] = useState('');
+  const [contacts, setContacts] = useState([]);
+  const [messages, setMessages] = useState([]);
+  const { user, logout } = useAuth();
+  const navigate = useNavigate();
+  const messagesEndRef = useRef(null);
 
-  const contacts = [
-    { name: 'Monalisa', lastMessage: 'He came later due to som...', time: '11:23PM', avatar: '👩🏻‍💼', unread: false, online: true },
-    { name: 'Ronald Richards', lastMessage: 'Sunt ea culpa do', time: '11:23PM', avatar: '👨🏽‍💼', unread: false, online: false },
-    { name: 'Jenny Wilson', lastMessage: 'Excepteur sint occaecat c...', time: '11:23PM', avatar: '👩🏼‍💼', unread: false, online: true },
-    { name: 'Jane Cooper', lastMessage: 'No, he is not', time: '11:23PM', avatar: '👩🏻', unread: false, online: true },
-    { name: 'Kristin Watson', lastMessage: 'Duis aute irure dolor in re...', time: '11:23PM', avatar: '👩🏼', unread: false, online: false },
-    { name: 'Darlene Robert', lastMessage: 'Please do this items', time: '11:23PM', avatar: '👩🏿‍💼', unread: false, online: false },
-    { name: 'Leslie Alexander', lastMessage: 'Excepteur sint occaecat c...', time: '11:23PM', avatar: '👩🏼‍🦰', unread: false, online: true },
-    { name: 'Ralph Edwards', lastMessage: 'Nope, we can\'t', time: '11:23PM', avatar: '👨🏾', unread: false, online: false },
-    { name: 'Jacob Jones', lastMessage: 'Neque porro quisquam est...', time: '11:23PM', avatar: '👨🏻', unread: false, online: false },
-    { name: 'Arlene McCoy', lastMessage: 'Sed ut perspiciatis unde...', time: '11:23PM', avatar: '👩🏾', unread: false, online: false },
-    { name: 'Floyd Miles', lastMessage: 'Ut enim ad minim veniam...', time: '11:23PM', avatar: '👨🏿', unread: false, online: false },
-    { name: 'Dianne Russell', lastMessage: 'I will come ASAP', time: '11:23PM', avatar: '👩🏻‍🦱', unread: false, online: true },
-    { name: 'Devon Lane', lastMessage: 'Ut enim ad minim veniam...', time: '11:23PM', avatar: '👨🏼', unread: false, online: true },
-    { name: 'Robert Fox', lastMessage: '', time: '11:23PM', avatar: '👨🏻‍💼', unread: false, online: false }
-  ];
+  useEffect(() => {
+    if (!user) {
+      navigate('/');
+      return;
+    }
+    fetchContacts();
 
-  const messages = [
-    { sender: 'Monalisa', message: 'Hello Jenny Cooper, how things there?', time: '', isOwn: false },
-    { sender: 'You', message: 'Hei Doe, I\'m doing well, what\'s about you? What\'s are you doing?', time: '', isOwn: true },
-    { sender: 'Monalisa', message: 'Yeah, I doing great', time: '', isOwn: false },
-    { sender: 'Monalisa', message: 'Do you know about javascript and typescript also?I need a some help on my project. Can you assist me.', time: '', isOwn: false },
-    { sender: 'You', message: 'yes, I know. Ok, let me know, when you need', time: '16:32PM', isOwn: true },
-    { sender: 'Monalisa', message: 'Hello! Good Morning! What\'s going on?', time: 'Aug 23 2023', isOwn: false },
-    { sender: 'You', message: 'Good Morning John Doe!', time: '', isOwn: true },
-    { sender: 'You', message: 'Hei Doe, I\'m doing well, what\'s about you? What\'s are you doing?', time: '', isOwn: true },
-    { sender: 'Monalisa', message: 'We want to start our project. Can we start now?I need a some help on my project. Can you assist me.', time: '', isOwn: false },
-    { sender: 'You', message: 'Sure! We can start', time: '', isOwn: true },
-    { sender: 'Monalisa', message: 'Ok, let get started', time: '', isOwn: false },
-    { sender: 'Monalisa', message: 'Do you have zoom app?', time: '', isOwn: false }
-  ];
+    socket.on('receive_message', (message) => {
+      if (selectedContact && message.chat_id === selectedContact.id) {
+        setMessages((prev) => [...prev, {
+          sender: message.username,
+          message: message.content,
+          time: new Date(message.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          isOwn: message.sender_id === user.id,
+          avatar: message.avatar
+        }]);
+        scrollToBottom();
+      }
+      // Refresh contacts to update last message
+      fetchContacts();
+    });
 
-  const photos = [
-    '🏞️', '🌅', '🎨', '🌊', '🏔️', '🎭', '🏜️', '❄️'
-  ];
+    return () => {
+      socket.off('receive_message');
+    };
+  }, [user, selectedContact]);
+
+  useEffect(() => {
+    if (selectedContact) {
+      fetchMessages(selectedContact.id);
+      socket.emit('join_room', selectedContact.id);
+    }
+  }, [selectedContact]);
+
+  const fetchContacts = async () => {
+    try {
+      const response = await api.get(`/chats?userId=${user.id}`);
+      const formattedContacts = response.data.map(chat => ({
+        id: chat.id,
+        name: chat.name,
+        lastMessage: chat.last_message || 'No messages yet',
+        time: chat.last_message_time ? new Date(chat.last_message_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '',
+        avatar: '👤', // Placeholder
+        unread: false,
+        online: true // Placeholder
+      }));
+      setContacts(formattedContacts);
+    } catch (error) {
+      console.error('Error fetching contacts:', error);
+    }
+  };
+
+  const fetchMessages = async (chatId) => {
+    try {
+      const response = await api.get(`/chats/${chatId}/messages`);
+      const formattedMessages = response.data.map(msg => ({
+        sender: msg.username,
+        message: msg.content,
+        time: new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        isOwn: msg.sender_id === user.id,
+        avatar: msg.avatar
+      }));
+      setMessages(formattedMessages);
+      scrollToBottom();
+    } catch (error) {
+      console.error('Error fetching messages:', error);
+    }
+  };
+
+  const handleSendMessage = () => {
+    if (!messageInput.trim() || !selectedContact) return;
+
+    const messageData = {
+      chatId: selectedContact.id,
+      senderId: user.id,
+      content: messageInput
+    };
+
+    socket.emit('send_message', messageData);
+    setMessageInput('');
+  };
+
+  const scrollToBottom = () => {
+    setTimeout(() => {
+      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    }, 100);
+  };
+
+  const handleLogout = () => {
+    logout();
+    navigate('/');
+  };
 
   return (
     <div style={styles.container}>
@@ -57,28 +122,9 @@ const ChatInterface = () => {
             <div style={styles.userAvatar}>
               <span>👤</span>
             </div>
-            <span style={styles.userName}>Jenny Cooper</span>
+            <span style={styles.userName}>{user?.username || 'User'}</span>
           </div>
         </div>
-
-        {/* Navigation */}
-        {/* <div style={styles.navigation}>
-          <div style={styles.navItemActive}>
-            <Home size={20} style={styles.navIcon} />
-          </div>
-          <div style={styles.navItem}>
-            <MessageCircle size={20} style={styles.navIcon} />
-          </div>
-          <div style={styles.navItem}>
-            <Users size={20} style={styles.navIcon} />
-          </div>
-          <div style={styles.navItem}>
-            <Heart size={20} style={styles.navIcon} />
-          </div>
-          <div style={styles.navItem}>
-            <Bell size={20} style={styles.navIcon} />
-          </div>
-        </div> */}
 
         {/* Connections Header */}
         <div style={styles.connectionsHeader}>
@@ -93,9 +139,9 @@ const ChatInterface = () => {
               key={index}
               style={{
                 ...styles.contactItem,
-                ...(selectedContact === contact.name ? styles.contactItemSelected : {})
+                ...(selectedContact?.id === contact.id ? styles.contactItemSelected : {})
               }}
-              onClick={() => setSelectedContact(contact.name)}
+              onClick={() => setSelectedContact(contact)}
             >
               <div style={styles.avatarContainer}>
                 <div style={styles.avatar}>
@@ -117,137 +163,112 @@ const ChatInterface = () => {
         </div>
 
         {/* Logout Button */}
-        {/* <div >
-          <div><p>So sad to see you go</p></div>
-          <button>Logout</button>
-          <Link>Logout</Link>
-        </div> */}
         <div>
-            <div style={styles.logout}><p>So sad to see you go</p>
-            <Link to={`/`} className='btn btn-login' style={{
+          <div style={styles.logout}>
+            <button onClick={handleLogout} className='btn btn-login' style={{
               background: 'red',
-              padding: '5px',
+              padding: '8px 16px',
               color: 'white',
               textDecoration: 'none',
-              borderRadius: '10px'
-            }}>Logout</Link>
-            </div>
+              borderRadius: '10px',
+              border: 'none',
+              cursor: 'pointer',
+              marginTop: '10px',
+              marginBottom: '10px'
+            }}>Logout</button>
+          </div>
         </div>
       </div>
 
       {/* Main Chat Area */}
       <div style={styles.mainChat}>
-        {/* Chat Messages */}
-        <div style={styles.chatArea}>
-          {/* Chat Header */}
-          <div style={styles.chatHeader}>
-            <div style={styles.chatHeaderLeft}>
-              <div style={styles.chatAvatar}>
-                👩🏻‍💼
+        {selectedContact ? (
+          <>
+            {/* Chat Header */}
+            <div style={styles.chatHeader}>
+              <div style={styles.chatHeaderLeft}>
+                <div style={styles.chatAvatar}>
+                  👤
+                </div>
+                <div>
+                  <h3 style={styles.chatName}>{selectedContact.name}</h3>
+                  <p style={styles.chatStatus}>Online</p>
+                </div>
               </div>
-              <div>
-                <h3 style={styles.chatName}>Monalisa</h3>
-                <p style={styles.chatStatus}>Last seen 10 min ago</p>
+              <div style={styles.chatHeaderRight}>
+                <Search size={20} style={styles.chatIcon} />
+                <MoreHorizontal size={20} style={styles.chatIcon} />
               </div>
             </div>
-            <div style={styles.chatHeaderRight}>
-              <Search size={20} style={styles.chatIcon} />
-              <MoreHorizontal size={20} style={styles.chatIcon} />
-            </div>
-          </div>
 
-          {/* Messages */}
-          <div style={styles.messagesContainer}>
-            {messages.map((message, index) => (
-              <div
-                key={index}
-                style={{
-                  ...styles.messageRow,
-                  justifyContent: message.isOwn ? 'flex-end' : 'flex-start'
-                }}
-              >
-                {!message.isOwn && (
-                  <div style={styles.messageAvatar}>
-                    👩🏻‍💼
-                  </div>
-                )}
+            {/* Messages */}
+            <div style={styles.messagesContainer}>
+              {messages.map((message, index) => (
                 <div
+                  key={index}
                   style={{
-                    ...styles.messageBubble,
-                    ...(message.isOwn ? styles.messageBubbleOwn : styles.messageBubbleOther)
+                    ...styles.messageRow,
+                    justifyContent: message.isOwn ? 'flex-end' : 'flex-start'
                   }}
                 >
-                  <p style={styles.messageText}>{message.message}</p>
-                  {message.time && (
-                    <p style={{
-                      ...styles.messageTime,
-                      color: message.isOwn ? 'rgba(255,255,255,0.7)' : '#9CA3AF'
-                    }}>
-                      {message.time}
-                    </p>
+                  {!message.isOwn && (
+                    <div style={styles.messageAvatar}>
+                      👤
+                    </div>
+                  )}
+                  <div
+                    style={{
+                      ...styles.messageBubble,
+                      ...(message.isOwn ? styles.messageBubbleOwn : styles.messageBubbleOther)
+                    }}
+                  >
+                    <p style={styles.messageText}>{message.message}</p>
+                    {message.time && (
+                      <p style={{
+                        ...styles.messageTime,
+                        color: message.isOwn ? 'rgba(255,255,255,0.7)' : '#9CA3AF'
+                      }}>
+                        {message.time}
+                      </p>
+                    )}
+                  </div>
+                  {message.isOwn && (
+                    <div style={styles.messageAvatarOwn}>
+                      👤
+                    </div>
                   )}
                 </div>
-                {message.isOwn && (
-                  <div style={styles.messageAvatarOwn}>
-                    👤
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-
-          {/* Message Input */}
-          <div style={styles.messageInput}>
-            <div style={styles.inputContainer}>
-              <input
-                type="text"
-                value={messageInput}
-                onChange={(e) => setMessageInput(e.target.value)}
-                placeholder="Type a message"
-                style={styles.input}
-              />
-              <button style={styles.sendButton}>
-                <Send size={18} />
-              </button>
+              ))}
+              <div ref={messagesEndRef} />
             </div>
-          </div>
-        </div>
-      </div>
 
-      {/* Right Sidebar */}
-      <div style={styles.rightSidebar}>
-        <div style={styles.profileSection}>
-          <div style={styles.profileAvatar}>
-            👩🏻‍💼
-          </div>
-          <h3 style={styles.profileName}>Monalisa</h3>
-          <p style={styles.profileRole}>Head Of Design at Logoipsum</p>
-          <p style={styles.profileLocation}>Bangladesh</p>
-          <p style={styles.profileTime}>Local Time: 5:41PM (UTC +06:00)</p>
-        </div>
-
-        <div style={styles.photosSection}>
-          <div style={styles.photoTabs}>
-            <button style={styles.photoTabActive}>
-              Photos
-            </button>
-            <button style={styles.photoTab}>
-              Files
-            </button>
-          </div>
-
-          <div style={styles.photoGrid}>
-            {photos.map((photo, index) => (
-              <div
-                key={index}
-                style={styles.photoItem}
-              >
-                {photo}
+            {/* Message Input */}
+            <div style={styles.messageInput}>
+              <div style={styles.inputContainer}>
+                <input
+                  type="text"
+                  value={messageInput}
+                  onChange={(e) => setMessageInput(e.target.value)}
+                  onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
+                  placeholder="Type a message"
+                  style={styles.input}
+                />
+                <button style={styles.sendButton} onClick={handleSendMessage}>
+                  <Send size={18} />
+                </button>
               </div>
-            ))}
+            </div>
+          </>
+        ) : (
+          <div style={{ flex: 1, display: 'flex', justifyContent: 'center', alignItems: 'center', flexDirection: 'column', color: '#6b7280' }}>
+            <MessageCircle size={64} style={{ marginBottom: '16px', opacity: 0.5 }} />
+            <h3>Select a chat to start messaging</h3>
           </div>
-        </div>
+        )}
       </div>
+
+      {/* Right Sidebar - Optional, hidden for now or static */}
+      {/* <div style={styles.rightSidebar}> ... </div> */}
     </div>
   );
 };
@@ -432,7 +453,8 @@ const styles = {
   },
   mainChat: {
     flex: 1,
-    display: 'flex'
+    display: 'flex',
+    flexDirection: 'column' // Ensure column layout
   },
   chatArea: {
     flex: 1,

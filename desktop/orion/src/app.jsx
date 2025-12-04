@@ -3,6 +3,7 @@ import * as React from 'react';
 import * as ReactDOM from "react-dom/client";
 import Auth from './Auth.jsx';
 import ChatInterface from './ChatInterface.jsx'
+import { AuthProvider } from './context/AuthContext.jsx';
 import {
   createBrowserRouter,
   RouterProvider,
@@ -17,6 +18,7 @@ import {
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
+    <AuthProvider>
       <HashRouter>
         <Routes>
           <Route path="/" element={<Auth />} />
@@ -25,5 +27,6 @@ ReactDOM.createRoot(document.getElementById("root")).render(
           <Route path='/resetPassword' element={<ResetPassword />} /> */}
         </Routes>
       </HashRouter>
+    </AuthProvider>
   </React.StrictMode>
 );

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
+import { useAuth } from './context/AuthContext.jsx';
 
 const AuthContainer = ({ children }) => (
   <div style={{
@@ -110,7 +111,7 @@ const Button = ({ children, onClick, variant = 'primary', type = 'button', disab
       cursor: disabled ? 'not-allowed' : 'pointer',
       transition: 'all 0.2s ease',
       marginBottom: '16px',
-      background: variant === 'primary' 
+      background: variant === 'primary'
         ? (disabled ? '#ccc' : 'linear-gradient(45deg, #667eea, #764ba2)')
         : 'transparent',
       color: variant === 'primary' ? 'white' : '#667eea',
@@ -156,22 +157,21 @@ const LinkButton = ({ children, onClick }) => (
 const LoginForm = ({ onSwitchToSignup, onSwitchToForgotPassword }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
+  const { login, isLoading, error } = useAuth();
+  const navigate = useNavigate();
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!email || !password) return;
-    setIsLoading(true);
-    // Simulate API call
-    setTimeout(() => {
-      setIsLoading(false);
-      alert('Login successful!');
-    }, 1500);
+    const success = await login(email, password);
+    if (success) {
+      navigate('/chat');
+    }
   };
 
   return (
     <>
       <Logo />
-      <div onSubmit={handleSubmit}>
+      <div>
         <h2 style={{
           fontSize: '24px',
           fontWeight: '600',
@@ -181,7 +181,22 @@ const LoginForm = ({ onSwitchToSignup, onSwitchToForgotPassword }) => {
         }}>
           Welcome back
         </h2>
-        
+
+        {error && (
+          <div style={{
+            background: '#fee2e2',
+            border: '1px solid #ef4444',
+            color: '#b91c1c',
+            padding: '12px',
+            borderRadius: '8px',
+            marginBottom: '16px',
+            fontSize: '14px',
+            textAlign: 'center'
+          }}>
+            {error}
+          </div>
+        )}
+
         <Input
           type="email"
           placeholder="Email address"
@@ -189,7 +204,7 @@ const LoginForm = ({ onSwitchToSignup, onSwitchToForgotPassword }) => {
           onChange={(e) => setEmail(e.target.value)}
           required
         />
-        
+
         <Input
           type="password"
           placeholder="Password"
@@ -197,41 +212,17 @@ const LoginForm = ({ onSwitchToSignup, onSwitchToForgotPassword }) => {
           onChange={(e) => setPassword(e.target.value)}
           required
         />
-        
+
         <div style={{ textAlign: 'right', marginBottom: '24px' }}>
           <LinkButton onClick={onSwitchToForgotPassword}>
             Forgot password?
           </LinkButton>
         </div>
-        
-        {/* <Button onClick={handleSubmit} disabled={isLoading}>
+
+        <Button onClick={handleSubmit} disabled={isLoading}>
           {isLoading ? 'Signing in...' : 'Sign in'}
-        </Button> */}
-        <Link to={`/chat`}
-        style={{
-            width: '89%',
-            padding: '14px 24px',
-            borderRadius: '12px',
-            fontSize: '16px',
-            fontWeight: '600',
-            fontFamily: 'inherit',
-            border: 'none',
-            background: 'linear-gradient(45deg, #667eea, #764ba2)',
-            color:'white',
-            display: 'block',
-            // cursor: disabled ? 'not-allowed' : 'pointer',
-            transition: 'all 0.2s ease',
-            marginBottom: '16px',
-            textAlign: 'center',
-            textDecoration: 'none',
-            // background: variant === 'primary' 
-            //     ? (disabled ? '#ccc' : 'linear-gradient(45deg, #667eea, #764ba2)')
-            //     : 'transparent',
-            // color: variant === 'primary' ? 'white' : '#667eea',
-            // opacity: disabled ? 0.6 : 1
-            }}
-        >Login</Link>
-        
+        </Button>
+
         <div style={{
           textAlign: 'center',
           color: '#666',
@@ -241,7 +232,7 @@ const LoginForm = ({ onSwitchToSignup, onSwitchToForgotPassword }) => {
           <LinkButton onClick={onSwitchToSignup}>
             Sign up
           </LinkButton>
-         
+
         </div>
       </div>
     </>
@@ -254,20 +245,19 @@ const SignupForm = ({ onSwitchToLogin }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
+  const { register, isLoading, error } = useAuth();
+  const navigate = useNavigate();
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!firstName || !lastName || !email || !password || !confirmPassword) return;
     if (password !== confirmPassword) {
       alert('Passwords do not match!');
       return;
     }
-    setIsLoading(true);
-    // Simulate API call
-    setTimeout(() => {
-      setIsLoading(false);
-      alert('Account created successfully!');
-    }, 1500);
+    const success = await register(firstName, lastName, email, password);
+    if (success) {
+      navigate('/chat');
+    }
   };
 
   return (
@@ -283,7 +273,22 @@ const SignupForm = ({ onSwitchToLogin }) => {
         }}>
           Create your account
         </h2>
-        
+
+        {error && (
+          <div style={{
+            background: '#fee2e2',
+            border: '1px solid #ef4444',
+            color: '#b91c1c',
+            padding: '12px',
+            borderRadius: '8px',
+            marginBottom: '16px',
+            fontSize: '14px',
+            textAlign: 'center'
+          }}>
+            {error}
+          </div>
+        )}
+
         <div style={{ display: 'flex', gap: '12px', marginBottom: '16px' }}>
           <Input
             type="text"
@@ -300,7 +305,7 @@ const SignupForm = ({ onSwitchToLogin }) => {
             required
           />
         </div>
-        
+
         <Input
           type="email"
           placeholder="Email address"
@@ -308,7 +313,7 @@ const SignupForm = ({ onSwitchToLogin }) => {
           onChange={(e) => setEmail(e.target.value)}
           required
         />
-        
+
         <Input
           type="password"
           placeholder="Password"
@@ -316,7 +321,7 @@ const SignupForm = ({ onSwitchToLogin }) => {
           onChange={(e) => setPassword(e.target.value)}
           required
         />
-        
+
         <Input
           type="password"
           placeholder="Confirm password"
@@ -324,11 +329,11 @@ const SignupForm = ({ onSwitchToLogin }) => {
           onChange={(e) => setConfirmPassword(e.target.value)}
           required
         />
-        
+
         <Button onClick={handleSubmit} disabled={isLoading}>
           {isLoading ? 'Creating account...' : 'Create account'}
         </Button>
-        
+
         <div style={{
           textAlign: 'center',
           color: '#666',
@@ -414,7 +419,7 @@ const ForgotPasswordForm = ({ onSwitchToLogin }) => {
         }}>
           Forgot your password?
         </h2>
-        
+
         <p style={{
           color: '#666',
           fontSize: '16px',
@@ -424,7 +429,7 @@ const ForgotPasswordForm = ({ onSwitchToLogin }) => {
         }}>
           Enter your email address and we'll send you instructions to reset your password.
         </p>
-        
+
         <Input
           type="email"
           placeholder="Email address"
@@ -432,11 +437,11 @@ const ForgotPasswordForm = ({ onSwitchToLogin }) => {
           onChange={(e) => setEmail(e.target.value)}
           required
         />
-        
+
         <Button onClick={handleSubmit} disabled={isLoading}>
           {isLoading ? 'Sending...' : 'Send reset instructions'}
         </Button>
-        
+
         <div style={{
           textAlign: 'center',
           color: '#666',

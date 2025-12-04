@@ -34,7 +34,7 @@ export default function ChatListScreen() {
     };
 
     const handleChatPress = (chatId: string) => {
-        router.push(`/chat/${chatId}`);
+        router.push(`/chat/${chatId}` as any);
     };
 
     const handleStartChat = async (selectedUser: any) => {

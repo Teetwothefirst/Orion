@@ -30,8 +30,25 @@ export default function LoginRoute() {
             } else {
                 await signIn(email, password);
             }
-        } catch (error) {
-            Alert.alert('Error', 'Authentication failed. Please check your credentials.');
+        } catch (error: any) {
+            console.error('Authentication error:', error);
+            let message = 'Authentication failed. Please check your credentials.';
+
+            if (error.response) {
+                // The request was made and the server responded with a status code
+                // that falls out of the range of 2xx
+                message = error.response.data || message;
+
+                // If message is an object (like for 401), stringify it or extract a field
+                if (typeof message === 'object') {
+                    message = JSON.stringify(message);
+                }
+            } else if (error.request) {
+                // The request was made but no response was received
+                message = 'Network error. Please check your connection.';
+            }
+
+            Alert.alert('Error', message);
         }
     };
 

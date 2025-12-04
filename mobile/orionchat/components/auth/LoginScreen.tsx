@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, Dimensions, TextInput, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, Dimensions, TextInput, ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { FontAwesome } from '@expo/vector-icons';
 
@@ -32,86 +32,97 @@ export default function LoginScreen({
 
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.content}>
-        {/* Header Section */}
-        <View style={styles.header}>
-          <View style={styles.iconContainer}>
-            <Ionicons name="bulb-outline" size={60} color="white" />
-          </View>
-          <Text style={styles.title}>{isRegister ? 'Create Account' : 'Login'}</Text>
-          <Text style={styles.subtitle}>{isRegister ? 'Sign up to get started' : 'Welcome back, please sign in'}</Text>
-        </View>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={styles.keyboardAvoidingView}
+      >
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
+          <View style={styles.content}>
+            {/* Header Section */}
+            <View style={styles.header}>
+              <View style={styles.iconContainer}>
+                <Ionicons name="bulb-outline" size={60} color="white" />
+              </View>
+              <Text style={styles.title}>{isRegister ? 'Create Account' : 'Login'}</Text>
+              <Text style={styles.subtitle}>{isRegister ? 'Sign up to get started' : 'Welcome back, please sign in'}</Text>
+            </View>
 
-        {/* Buttons Section */}
-        <View style={styles.buttonContainer}>
-          {!showEmailInput ? (
-            <>
-              <TouchableOpacity style={styles.googleButton} onPress={onLoginWithGoogle}>
-                <FontAwesome name="google" size={20} color="black" style={styles.buttonIcon} />
-                <Text style={styles.googleButtonText}>Continue with Google</Text>
-              </TouchableOpacity>
+            {/* Buttons Section */}
+            <View style={styles.buttonContainer}>
+              {!showEmailInput ? (
+                <>
+                  <TouchableOpacity style={styles.googleButton} onPress={onLoginWithGoogle}>
+                    <FontAwesome name="google" size={20} color="black" style={styles.buttonIcon} />
+                    <Text style={styles.googleButtonText}>Continue with Google</Text>
+                  </TouchableOpacity>
 
-              <TouchableOpacity style={styles.secondaryButton} onPress={onLoginWithPasskey}>
-                <Ionicons name="key-outline" size={20} color="white" style={styles.buttonIcon} />
-                <Text style={styles.secondaryButtonText}>Continue with Passkey</Text>
-              </TouchableOpacity>
+                  <TouchableOpacity style={styles.secondaryButton} onPress={onLoginWithPasskey}>
+                    <Ionicons name="key-outline" size={20} color="white" style={styles.buttonIcon} />
+                    <Text style={styles.secondaryButtonText}>Continue with Passkey</Text>
+                  </TouchableOpacity>
 
-              <TouchableOpacity style={styles.secondaryButton} onPress={() => setShowEmailInput(true)}>
-                <Ionicons name="mail-outline" size={20} color="white" style={styles.buttonIcon} />
-                <Text style={styles.secondaryButtonText}>Continue with Email</Text>
-              </TouchableOpacity>
-            </>
-          ) : (
-            <>
-              {isRegister && (
-                <TextInput
-                  style={styles.input}
-                  placeholder="Username"
-                  placeholderTextColor="#666"
-                  value={username}
-                  onChangeText={setUsername}
-                  autoCapitalize="none"
-                />
+                  <TouchableOpacity style={styles.secondaryButton} onPress={() => setShowEmailInput(true)}>
+                    <Ionicons name="mail-outline" size={20} color="white" style={styles.buttonIcon} />
+                    <Text style={styles.secondaryButtonText}>Continue with Email</Text>
+                  </TouchableOpacity>
+                </>
+              ) : (
+                <>
+                  {isRegister && (
+                    <TextInput
+                      style={styles.input}
+                      placeholder="Username"
+                      placeholderTextColor="#666"
+                      value={username}
+                      onChangeText={setUsername}
+                      autoCapitalize="none"
+                    />
+                  )}
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Email"
+                    placeholderTextColor="#666"
+                    value={email}
+                    onChangeText={setEmail}
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                  />
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Password"
+                    placeholderTextColor="#666"
+                    value={password}
+                    onChangeText={setPassword}
+                    secureTextEntry
+                  />
+
+                  <TouchableOpacity style={styles.googleButton} onPress={handleEmailSubmit} disabled={isLoading}>
+                    {isLoading ? (
+                      <ActivityIndicator color="black" />
+                    ) : (
+                      <Text style={styles.googleButtonText}>{isRegister ? 'Sign Up' : 'Login'}</Text>
+                    )}
+                  </TouchableOpacity>
+
+                  <TouchableOpacity onPress={() => setIsRegister(!isRegister)} style={styles.switchButton}>
+                    <Text style={styles.switchText}>
+                      {isRegister ? 'Already have an account? Login' : "Don't have an account? Sign Up"}
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity onPress={() => setShowEmailInput(false)} style={styles.backButton}>
+                    <Text style={styles.backButtonText}>Back to options</Text>
+                  </TouchableOpacity>
+                </>
               )}
-              <TextInput
-                style={styles.input}
-                placeholder="Email"
-                placeholderTextColor="#666"
-                value={email}
-                onChangeText={setEmail}
-                keyboardType="email-address"
-                autoCapitalize="none"
-              />
-              <TextInput
-                style={styles.input}
-                placeholder="Password"
-                placeholderTextColor="#666"
-                value={password}
-                onChangeText={setPassword}
-                secureTextEntry
-              />
-
-              <TouchableOpacity style={styles.googleButton} onPress={handleEmailSubmit} disabled={isLoading}>
-                {isLoading ? (
-                  <ActivityIndicator color="black" />
-                ) : (
-                  <Text style={styles.googleButtonText}>{isRegister ? 'Sign Up' : 'Login'}</Text>
-                )}
-              </TouchableOpacity>
-
-              <TouchableOpacity onPress={() => setIsRegister(!isRegister)} style={styles.switchButton}>
-                <Text style={styles.switchText}>
-                  {isRegister ? 'Already have an account? Login' : "Don't have an account? Sign Up"}
-                </Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity onPress={() => setShowEmailInput(false)} style={styles.backButton}>
-                <Text style={styles.backButtonText}>Back to options</Text>
-              </TouchableOpacity>
-            </>
-          )}
-        </View>
-      </View>
+            </View>
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
@@ -121,15 +132,22 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#121212', // Dark background
   },
+  keyboardAvoidingView: {
+    flex: 1,
+  },
+  scrollContent: {
+    flexGrow: 1,
+  },
   content: {
     flex: 1,
     paddingHorizontal: 24,
-    justifyContent: 'space-between',
+    justifyContent: 'center', // Changed from space-between to center for better scrolling behavior
     paddingVertical: 40,
+    minHeight: Dimensions.get('window').height - 100, // Ensure minimum height
   },
   header: {
     alignItems: 'center',
-    marginTop: 60,
+    marginBottom: 40, // Changed from marginTop to marginBottom for better flow
   },
   iconContainer: {
     marginBottom: 20,

@@ -12,6 +12,9 @@ const API_URL = 'https://cuddly-facts-heal.loca.lt';
 
 export const api = axios.create({
     baseURL: API_URL,
+    headers: {
+        'bypass-tunnel-reminder': 'true',
+    },
 });
 
 export const socket = io(API_URL, {

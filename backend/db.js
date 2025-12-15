@@ -18,7 +18,9 @@ db.serialize(() => {
         username TEXT UNIQUE,
         email TEXT UNIQUE,
         password TEXT,
-        avatar TEXT
+        avatar TEXT,
+        reset_token TEXT,
+        reset_token_expiry INTEGER
     )`);
 
     // Chats table
@@ -48,6 +50,10 @@ db.serialize(() => {
         FOREIGN KEY (chat_id) REFERENCES chats(id),
         FOREIGN KEY (sender_id) REFERENCES users(id)
     )`);
+
+    // Migration for existing databases
+    db.run("ALTER TABLE users ADD COLUMN reset_token TEXT", (err) => { /* ignore */ });
+    db.run("ALTER TABLE users ADD COLUMN reset_token_expiry INTEGER", (err) => { /* ignore */ });
 });
 
 module.exports = db;

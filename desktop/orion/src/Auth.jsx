@@ -341,56 +341,88 @@ const SignupForm = ({ onSwitchToLogin }) => {
 
 const ForgotPasswordForm = ({ onSwitchToLogin }) => {
   const [email, setEmail] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const [isSubmitted, setIsSubmitted] = useState(false);
+  const [token, setToken] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [step, setStep] = useState(1); // 1: Email, 2: Reset
+  const { forgotPassword, resetPassword, isLoading, error } = useAuth();
 
-  const handleSubmit = () => {
+  const handleSendLink = async () => {
     if (!email) return;
-    setIsLoading(true);
-    // Simulate API call
-    setTimeout(() => {
-      setIsLoading(false);
-      setIsSubmitted(true);
-    }, 1500);
+    const result = await forgotPassword(email);
+    if (result && result.token) {
+      setToken(result.token); // Auto-fill for dev
+      setStep(2);
+    }
   };
 
-  if (isSubmitted) {
+  const handleReset = async () => {
+    if (!token || !newPassword) return;
+    const result = await resetPassword(token, newPassword);
+    if (result) {
+      alert("Password reset successful. Please login.");
+      onSwitchToLogin();
+    }
+  };
+
+  if (step === 2) {
     return (
       <>
         <Logo />
-        <div style={{ textAlign: 'center' }}>
-          <div style={{
-            width: '64px',
-            height: '64px',
-            background: 'linear-gradient(45deg, #10b981, #059669)',
-            borderRadius: '50%',
-            margin: '0 auto 24px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            fontSize: '32px'
-          }}>
-            ✓
-          </div>
+        <div>
           <h2 style={{
             fontSize: '24px',
             fontWeight: '600',
             color: '#1a1a1a',
-            marginBottom: '16px'
+            marginBottom: '16px',
+            textAlign: 'center'
           }}>
-            Check your email
+            Reset Password
           </h2>
-          <p style={{
-            color: '#666',
-            fontSize: '16px',
-            marginBottom: '32px',
-            lineHeight: '1.5'
-          }}>
-            We've sent password reset instructions to <strong>{email}</strong>
+
+          {error && (
+            <div style={{
+              background: '#fee2e2',
+              border: '1px solid #ef4444',
+              color: '#b91c1c',
+              padding: '12px',
+              borderRadius: '8px',
+              marginBottom: '16px',
+              fontSize: '14px',
+              textAlign: 'center'
+            }}>
+              {error}
+            </div>
+          )}
+
+          <p style={{ textAlign: 'center', marginBottom: '16px', color: '#666' }}>
+            Token generated: <strong>{token}</strong>
           </p>
-          <Button onClick={onSwitchToLogin}>
-            Back to sign in
+
+          <Input
+            type="text"
+            placeholder="Reset Token"
+            value={token}
+            onChange={(e) => setToken(e.target.value)}
+            required
+          />
+
+          <Input
+            type="password"
+            placeholder="New Password"
+            value={newPassword}
+            onChange={(e) => setNewPassword(e.target.value)}
+            required
+          />
+
+          <Button onClick={handleReset} disabled={isLoading}>
+            {isLoading ? 'Resetting...' : 'Reset Password'}
           </Button>
+
+          <div style={{ textAlign: 'center' }}>
+            <LinkButton onClick={() => setStep(1)}>
+              Back
+            </LinkButton>
+          </div>
         </div>
       </>
     );
@@ -410,6 +442,21 @@ const ForgotPasswordForm = ({ onSwitchToLogin }) => {
           Forgot your password?
         </h2>
 
+        {error && (
+          <div style={{
+            background: '#fee2e2',
+            border: '1px solid #ef4444',
+            color: '#b91c1c',
+            padding: '12px',
+            borderRadius: '8px',
+            marginBottom: '16px',
+            fontSize: '14px',
+            textAlign: 'center'
+          }}>
+            {error}
+          </div>
+        )}
+
         <p style={{
           color: '#666',
           fontSize: '16px',
@@ -417,7 +464,7 @@ const ForgotPasswordForm = ({ onSwitchToLogin }) => {
           textAlign: 'center',
           lineHeight: '1.5'
         }}>
-          Enter your email address and we'll send you instructions to reset your password.
+          Enter your email address and we'll send you a reset token.
         </p>
 
         <Input
@@ -428,7 +475,7 @@ const ForgotPasswordForm = ({ onSwitchToLogin }) => {
           required
         />
 
-        <Button onClick={handleSubmit} disabled={isLoading}>
+        <Button onClick={handleSendLink} disabled={isLoading}>
           {isLoading ? 'Sending...' : 'Send reset instructions'}
         </Button>
 

@@ -55,6 +55,34 @@ export const AuthProvider = ({ children }) => {
         }
     };
 
+    const forgotPassword = async (email) => {
+        setIsLoading(true);
+        setError(null);
+        try {
+            const response = await api.post('/auth/forgot-password', { email });
+            return response.data;
+        } catch (error) {
+            setError(error.response?.data || 'Failed to send reset link');
+            return null;
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const resetPassword = async (token, newPassword) => {
+        setIsLoading(true);
+        setError(null);
+        try {
+            const response = await api.post('/auth/reset-password', { token, newPassword });
+            return response.data;
+        } catch (error) {
+            setError(error.response?.data || 'Failed to reset password');
+            return null;
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
     const logout = () => {
         setUser(null);
         setToken(null);
@@ -62,7 +90,7 @@ export const AuthProvider = ({ children }) => {
     };
 
     return (
-        <AuthContext.Provider value={{ user, token, login, register, logout, isLoading, error }}>
+        <AuthContext.Provider value={{ user, token, login, register, logout, forgotPassword, resetPassword, isLoading, error }}>
             {children}
         </AuthContext.Provider>
     );

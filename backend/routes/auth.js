@@ -2,6 +2,7 @@ const express = require('express');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const db = require('../db');
+const crypto = require('crypto');
 
 const router = express.Router();
 const JWT_SECRET = 'your_jwt_secret_key'; // In production, use environment variable
@@ -58,6 +59,44 @@ router.get('/users', (req, res) => {
     db.all(sql, params, (err, users) => {
         if (err) return res.status(500).send("Error retrieving users.");
         res.status(200).send(users);
+    });
+});
+
+// Forgot Password
+router.post('/forgot-password', (req, res) => {
+    const { email } = req.body;
+    db.get('SELECT * FROM users WHERE email = ?', [email], (err, user) => {
+        if (err) return res.status(500).send('Error on the server.');
+        if (!user) return res.status(404).send('User not found.');
+
+        // Generate token
+        const token = crypto.randomBytes(3).toString('hex').toUpperCase(); // 6 chars for easier typing
+        const expiry = Date.now() + 3600000; // 1 hour
+
+        db.run('UPDATE users SET reset_token = ?, reset_token_expiry = ? WHERE id = ?', [token, expiry, user.id], (err) => {
+            if (err) return res.status(500).send('Error updating user.');
+
+            // In a real app, send email here. 
+            // For this tutorial/dev environment, we send the token back in the response.
+            res.status(200).send({ message: 'Reset token generated.', token: token });
+        });
+    });
+});
+
+// Reset Password
+router.post('/reset-password', (req, res) => {
+    const { token, newPassword } = req.body;
+
+    db.get('SELECT * FROM users WHERE reset_token = ? AND reset_token_expiry > ?', [token, Date.now()], (err, user) => {
+        if (err) return res.status(500).send('Error on the server.');
+        if (!user) return res.status(400).send('Password reset token is invalid or has expired.');
+
+        const hashedPassword = bcrypt.hashSync(newPassword, 8);
+
+        db.run('UPDATE users SET password = ?, reset_token = NULL, reset_token_expiry = NULL WHERE id = ?', [hashedPassword, user.id], (err) => {
+            if (err) return res.status(500).send('Error updating password.');
+            res.status(200).send({ message: 'Password has been reset.' });
+        });
     });
 });
 

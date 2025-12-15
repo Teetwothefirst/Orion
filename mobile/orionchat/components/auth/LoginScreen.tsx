@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, Dimensions, TextInput, ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
+import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { FontAwesome } from '@expo/vector-icons';
 
@@ -23,6 +24,7 @@ export default function LoginScreen({
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [username, setUsername] = useState('');
+  const router = useRouter();
 
   const handleEmailSubmit = () => {
     if (onLoginWithEmail) {
@@ -106,6 +108,10 @@ export default function LoginScreen({
                     ) : (
                       <Text style={styles.googleButtonText}>{isRegister ? 'Sign Up' : 'Login'}</Text>
                     )}
+                  </TouchableOpacity>
+
+                  <TouchableOpacity onPress={() => router.push('/forgot-password' as any)} style={{ alignItems: 'center', marginBottom: 10 }}>
+                    <Text style={{ color: '#007AFF', fontSize: 14 }}>Forgot Password?</Text>
                   </TouchableOpacity>
 
                   <TouchableOpacity onPress={() => setIsRegister(!isRegister)} style={styles.switchButton}>

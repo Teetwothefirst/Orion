@@ -37,12 +37,22 @@ export default function ChatListScreen() {
         router.push(`/chat/${chatId}` as any);
     };
 
-    const handleStartChat = async (selectedUser: any) => {
+    const handleStartChat = async (selectedData: any, groupName?: string) => {
         try {
-            const response = await api.post('/chats', {
-                userId: user?.id,
-                otherUserId: selectedUser.id
-            });
+            let payload: any = { userId: user?.id };
+
+            if (Array.isArray(selectedData)) {
+                // Group Chat
+                payload.type = 'group';
+                payload.name = groupName || 'New Group';
+                payload.participantIds = selectedData.map(u => u.id);
+            } else {
+                // Private Chat
+                payload.type = 'private';
+                payload.otherUserId = selectedData.id;
+            }
+
+            const response = await api.post('/chats', payload);
 
             setShowNewChatModal(false);
             fetchChats(); // Refresh list
@@ -52,6 +62,14 @@ export default function ChatListScreen() {
         } catch (error) {
             console.error('Error creating chat:', error);
         }
+    };
+
+    const getFilteredChats = () => {
+        return chats.filter(chat => {
+            if (activeTab === 'chat') return chat.type === 'private';
+            if (activeTab === 'group') return chat.type !== 'private'; // group
+            return true;
+        });
     };
 
     const renderItem = ({ item }: { item: any }) => (
@@ -89,7 +107,7 @@ export default function ChatListScreen() {
                 </View>
             ) : (
                 <FlatList
-                    data={chats}
+                    data={getFilteredChats()}
                     renderItem={renderItem}
                     keyExtractor={(item) => item.id.toString()}
                     contentContainerStyle={styles.listContent}

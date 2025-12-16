@@ -7,9 +7,8 @@ const router = express.Router();
 router.get('/', (req, res) => {
     const userId = req.query.userId;
 
-    //     SELECT c.*, 
     const sql = `
-        SELECT c.id, c.type, c.updated_at,
+        SELECT c.id, c.type, c.name as group_name, c.updated_at,
                CASE 
                    WHEN c.type = 'private' THEN (
                        SELECT u.username 
@@ -28,7 +27,6 @@ router.get('/', (req, res) => {
         ORDER BY last_message_time DESC
     `;
 
-    // db.all(sql, [userId], (err, chats) => {
     db.all(sql, [userId, userId], (err, chats) => {
         if (err) {
             console.error('Error retrieving chats:', err);
@@ -38,38 +36,48 @@ router.get('/', (req, res) => {
     });
 });
 
-// Create a new chat (or get existing private chat)
+// Create a new chat (private or group)
 router.post('/', (req, res) => {
-    const { userId, otherUserId } = req.body;
+    const { userId, otherUserId, type, name, participantIds } = req.body;
+    const chatType = type || 'private';
 
-    // Check if private chat already exists
-    const checkSql = `
-        SELECT c.id 
-        FROM chats c
-        JOIN chat_participants cp1 ON c.id = cp1.chat_id
-        JOIN chat_participants cp2 ON c.id = cp2.chat_id
-        WHERE c.type = 'private' AND cp1.user_id = ? AND cp2.user_id = ?
-    `;
+    if (chatType === 'private') {
+        // Check if private chat already exists
+        const checkSql = `
+            SELECT c.id 
+            FROM chats c
+            JOIN chat_participants cp1 ON c.id = cp1.chat_id
+            JOIN chat_participants cp2 ON c.id = cp2.chat_id
+            WHERE c.type = 'private' AND cp1.user_id = ? AND cp2.user_id = ?
+        `;
 
-    db.get(checkSql, [userId, otherUserId], (err, chat) => {
-        if (chat) {
-            return res.status(200).send(chat);
-        }
+        db.get(checkSql, [userId, otherUserId], (err, chat) => {
+            if (chat) {
+                return res.status(200).send(chat);
+            }
+            createChat(chatType, 'Private Chat', [userId, otherUserId]);
+        });
+    } else {
+        // Group Chat
+        // Always create a new group chat
+        createChat(chatType, name || 'New Group', [userId, ...participantIds]);
+    }
 
-        // Create new chat
-        db.run(`INSERT INTO chats (name, type) VALUES (?, ?)`, ['Private Chat', 'private'], function (err) {
+    function createChat(type, name, participants) {
+        db.run(`INSERT INTO chats (name, type) VALUES (?, ?)`, [name, type], function (err) {
             if (err) return res.status(500).send("Error creating chat.");
             const chatId = this.lastID;
 
             // Add participants
-            const stmt = db.prepare(`INSERT INTO chat_participants (chat_id, user_id) VALUES (?, ?)`);
-            stmt.run(chatId, userId);
-            stmt.run(chatId, otherUserId);
-            stmt.finalize();
+            const placeholders = participants.map(() => '(?, ?)').join(',');
+            const values = participants.flatMap(uid => [chatId, uid]);
 
-            res.status(200).send({ id: chatId });
+            db.run(`INSERT INTO chat_participants (chat_id, user_id) VALUES ${placeholders}`, values, (err) => {
+                if (err) return res.status(500).send("Error adding participants.");
+                res.status(200).send({ id: chatId, name: name, type: type });
+            });
         });
-    });
+    }
 });
 
 // Get messages for a chat

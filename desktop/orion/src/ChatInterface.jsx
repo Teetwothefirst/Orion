@@ -16,6 +16,7 @@ const ChatInterface = () => {
   const [availableUsers, setAvailableUsers] = useState([]);
   const [userSearchQuery, setUserSearchQuery] = useState('');
   const [showProfileSettings, setShowProfileSettings] = useState(false);
+  const [activeTab, setActiveTab] = useState('chat'); // 'chat' or 'group'
 
 
 
@@ -58,12 +59,13 @@ const ChatInterface = () => {
       const response = await api.get(`/chats?userId=${user.id}`);
       const formattedContacts = response.data.map(chat => ({
         id: chat.id,
-        name: chat.name,
+        name: chat.name || chat.group_name, // Backend might return group_name separately
+        type: chat.type || 'private',
         lastMessage: chat.last_message || 'No messages yet',
         time: chat.last_message_time ? new Date(chat.last_message_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '',
-        avatar: '👤', // Placeholder
+        avatar: chat.type === 'private' ? '👤' : '👥',
         unread: false,
-        online: true // Placeholder
+        online: true
       }));
       setContacts(formattedContacts);
     } catch (error) {
@@ -200,34 +202,60 @@ const ChatInterface = () => {
           </div>
         </div>
 
+        {/* Toggle (Chat / Group) */}
+        <div style={styles.toggleContainer}>
+          <div style={styles.toggleWrapper}>
+            <div
+              style={{
+                ...styles.toggleButton,
+                ...(activeTab === 'chat' ? styles.toggleButtonActive : {})
+              }}
+              onClick={() => setActiveTab('chat')}
+            >
+              Chat
+            </div>
+            <div
+              style={{
+                ...styles.toggleButton,
+                ...(activeTab === 'group' ? styles.toggleButtonActive : {})
+              }}
+              onClick={() => setActiveTab('group')}
+            >
+              Group
+            </div>
+          </div>
+        </div>
+
         {/* Contacts List */}
         <div style={styles.contactsList}>
-          {contacts.map((contact, index) => (
-            <div
-              key={index}
-              style={{
-                ...styles.contactItem,
-                ...(selectedContact?.id === contact.id ? styles.contactItemSelected : {})
-              }}
-              onClick={() => setSelectedContact(contact)}
-            >
-              <div style={styles.avatarContainer}>
-                <div style={styles.avatar}>
-                  {contact.avatar}
+          {contacts
+            .filter(c => activeTab === 'chat' ? c.type === 'private' : c.type !== 'private')
+            .map((contact, index) => (
+              <div
+                key={index}
+                style={{
+                  ...styles.contactItem,
+                  ...(selectedContact?.id === contact.id ? styles.contactItemSelected : {})
+                }}
+                onClick={() => setSelectedContact(contact)}
+              >
+                <div style={styles.avatarContainer}>
+                  <div style={styles.avatar}>
+                    {contact.avatar}
+                  </div>
+                  {contact.online && (
+                    <div style={styles.onlineIndicator}></div>
+                  )}
                 </div>
-                {contact.online && (
-                  <div style={styles.onlineIndicator}></div>
-                )}
-              </div>
-              <div style={styles.contactInfo}>
-                <div style={styles.contactHeader}>
-                  <p style={styles.contactName}>{contact.name}</p>
-                  <span style={styles.contactTime}>{contact.time}</span>
+                <div style={styles.contactInfo}>
+                  <div style={styles.contactHeader}>
+                    <p style={styles.contactName}>{contact.name}</p>
+                    <span style={styles.contactTime}>{contact.time}</span>
+                  </div>
+                  <p style={styles.contactMessage}>{contact.lastMessage}</p>
                 </div>
-                <p style={styles.contactMessage}>{contact.lastMessage}</p>
               </div>
-            </div>
-          ))}
+            ))}
         </div>
 
         {/* Logout Button */}
@@ -342,13 +370,68 @@ const ChatInterface = () => {
         <div style={styles.modalOverlay} onClick={() => setShowNewChatModal(false)}>
           <div style={styles.modalContent} onClick={(e) => e.stopPropagation()}>
             <div style={styles.modalHeader}>
-              <h2 style={styles.modalTitle}>Start New Chat</h2>
+              <h2 style={styles.modalTitle}>
+                {activeTab === 'group' ? 'New Group Chat' : 'Start New Chat'}
+              </h2>
               <X
                 size={24}
                 style={{ cursor: 'pointer', color: '#6b7280' }}
                 onClick={() => setShowNewChatModal(false)}
               />
             </div>
+
+            {/* Group Creation UI */}
+            {activeTab === 'group' && (
+              <div style={{ padding: '0 16px 16px 16px', display: 'flex', gap: '8px' }}>
+                <input
+                  type="text"
+                  placeholder="Group Name"
+                  style={{ ...styles.searchInput, flex: 1 }}
+                  id="groupNameInput"
+                />
+                <button
+                  style={{ ...styles.sendButton, borderRadius: '8px', width: 'auto', padding: '0 16px' }}
+                  onClick={() => {
+                    const name = document.getElementById('groupNameInput').value;
+                    const selectedCheckboxes = document.querySelectorAll('input[name="userSelect"]:checked');
+                    const selectedIds = Array.from(selectedCheckboxes).map(cb => cb.value);
+
+                    if (!name) return alert('Please enter a group name');
+                    if (selectedIds.length === 0) return alert('Please select at least one member');
+
+                    // Call API to create group
+                    // For now, reusing handleStartChat logic but adapted
+                    api.post('/chats', {
+                      userId: user.id,
+                      type: 'group',
+                      name: name,
+                      participantIds: selectedIds
+                    }).then(async (response) => {
+                      setShowNewChatModal(false);
+                      await fetchContacts();
+                      // Select the new chat
+                      // Logic similar to handleStartChat
+                      const chatResponse = await api.get(`/chats?userId=${user.id}`);
+                      const chat = chatResponse.data.find(c => c.id === response.data.id);
+                      if (chat) {
+                        setSelectedContact({
+                          id: chat.id,
+                          name: chat.name || chat.group_name,
+                          type: chat.type,
+                          lastMessage: chat.last_message || 'No messages yet',
+                          time: '',
+                          avatar: '👥',
+                          unread: false,
+                          online: true
+                        });
+                      }
+                    }).catch(err => console.error(err));
+                  }}
+                >
+                  Create
+                </button>
+              </div>
+            )}
 
             <input
               type="text"
@@ -361,16 +444,34 @@ const ChatInterface = () => {
 
             <div style={styles.userList}>
               {filteredUsers.length > 0 ? (
-                filteredUsers.map((user) => (
+                filteredUsers.map((u) => (
                   <div
-                    key={user.id}
+                    key={u.id}
                     style={styles.userItem}
-                    onClick={() => handleStartChat(user)}
+                    onClick={() => {
+                      if (activeTab === 'chat') {
+                        handleStartChat(u);
+                      } else {
+                        // Toggle checkbox if clicking row in group mode
+                        const cb = document.getElementById(`user-cb-${u.id}`);
+                        if (cb) cb.click();
+                      }
+                    }}
                   >
+                    {activeTab === 'group' && (
+                      <input
+                        type="checkbox"
+                        name="userSelect"
+                        value={u.id}
+                        id={`user-cb-${u.id}`}
+                        onClick={(e) => e.stopPropagation()}
+                        style={{ marginRight: '12px' }}
+                      />
+                    )}
                     <div style={styles.userItemAvatar}>👤</div>
                     <div style={styles.userItemInfo}>
-                      <p style={styles.userItemName}>{user.username}</p>
-                      <p style={styles.userItemEmail}>{user.email}</p>
+                      <p style={styles.userItemName}>{u.username}</p>
+                      <p style={styles.userItemEmail}>{u.email}</p>
                     </div>
                   </div>
                 ))
@@ -520,6 +621,32 @@ const styles = {
     justifyContent: 'space-between',
     padding: '12px 16px',
     borderBottom: '1px solid #f3f4f6'
+  },
+  toggleContainer: {
+    padding: '12px 16px',
+    borderBottom: '1px solid #f3f4f6',
+  },
+  toggleWrapper: {
+    display: 'flex',
+    backgroundColor: '#f3f4f6',
+    borderRadius: '8px',
+    padding: '4px',
+  },
+  toggleButton: {
+    flex: 1,
+    textAlign: 'center',
+    padding: '6px',
+    fontSize: '14px',
+    fontWeight: '500',
+    color: '#6b7280',
+    cursor: 'pointer',
+    borderRadius: '6px',
+    transition: 'all 0.2s',
+  },
+  toggleButtonActive: {
+    backgroundColor: 'white',
+    color: '#1f2937',
+    boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
   },
   connectionsTitle: {
     fontWeight: '500',

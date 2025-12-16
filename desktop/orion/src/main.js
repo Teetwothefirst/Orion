@@ -11,6 +11,7 @@ const createWindow = () => {
   const mainWindow = new BrowserWindow({
     width: 800,
     height: 600,
+    autoHideMenuBar: true, // Hide menu bar
     webPreferences: {
       preload: MAIN_WINDOW_PRELOAD_WEBPACK_ENTRY,
       webSecurity: false, // Disable web security to allow API calls in development
@@ -18,6 +19,9 @@ const createWindow = () => {
       contextIsolation: true,
     },
   });
+
+  // Remove the menu bar completely
+  mainWindow.setMenu(null);
 
   // and load the index.html of the app.
   mainWindow.loadURL(MAIN_WINDOW_WEBPACK_ENTRY);

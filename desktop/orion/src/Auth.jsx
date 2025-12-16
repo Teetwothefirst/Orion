@@ -5,21 +5,23 @@ import { useAuth } from './context/AuthContext.jsx';
 const AuthContainer = ({ children }) => (
   <div style={{
     minHeight: '100vh',
-    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+    background: 'radial-gradient(circle at top right, #e0e7ff 0%, #f3e8ff 40%, #ffffff 100%)',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+    fontFamily: '"Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif', // Use Inter if available
     padding: '20px'
   }}>
     <div style={{
-      background: 'white',
-      borderRadius: '16px',
-      boxShadow: '0 20px 40px rgba(0,0,0,0.1)',
+      background: 'rgba(255, 255, 255, 0.9)',
+      backdropFilter: 'blur(20px)',
+      borderRadius: '24px',
+      boxShadow: '0 20px 60px -10px rgba(0,0,0,0.1), 0 10px 30px -15px rgba(0,0,0,0.05)',
       width: '100%',
-      maxWidth: '400px',
-      padding: '40px',
-      position: 'relative'
+      maxWidth: '420px',
+      padding: '48px',
+      position: 'relative',
+      border: '1px solid rgba(255,255,255,0.8)'
     }}>
       {children}
     </div>
@@ -32,17 +34,18 @@ const Logo = () => (
     marginBottom: '32px'
   }}>
     <div style={{
-      width: '48px',
-      height: '48px',
-      background: 'linear-gradient(45deg, #667eea, #764ba2)',
-      borderRadius: '12px',
-      margin: '0 auto 16px',
+      width: '60px',
+      height: '60px',
+      background: 'linear-gradient(135deg, #6366f1 0%, #a855f7 100%)',
+      borderRadius: '16px',
+      margin: '0 auto 20px',
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
-      fontSize: '24px',
+      fontSize: '32px',
       color: 'white',
-      fontWeight: 'bold'
+      fontWeight: 'bold',
+      boxShadow: '0 10px 25px rgba(99, 102, 241, 0.4)'
     }}>
       O
     </div>
@@ -73,24 +76,27 @@ const Input = ({ type, placeholder, value, onChange, required }) => (
     required={required}
     style={{
       width: '100%',
-      padding: '14px 16px',
-      border: '2px solid #e1e5e9',
-      borderRadius: '12px',
-      fontSize: '16px',
+      padding: '16px 20px',
+      border: '2px solid #f1f5f9', // slate-100
+      borderRadius: '16px',
+      fontSize: '15px',
       fontFamily: 'inherit',
-      transition: 'all 0.2s ease',
+      transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
       outline: 'none',
       boxSizing: 'border-box',
       marginBottom: '16px',
-      background: '#fafbfc'
+      background: '#f8fafc', // slate-50
+      color: '#1e293b' // slate-800
     }}
     onFocus={(e) => {
-      e.target.style.borderColor = '#667eea';
+      e.target.style.borderColor = '#8b5cf6'; // violet-500
       e.target.style.background = 'white';
+      e.target.style.boxShadow = '0 0 0 4px rgba(139, 92, 246, 0.1)';
     }}
     onBlur={(e) => {
-      e.target.style.borderColor = '#e1e5e9';
-      e.target.style.background = '#fafbfc';
+      e.target.style.borderColor = '#f1f5f9';
+      e.target.style.background = '#f8fafc';
+      e.target.style.boxShadow = 'none';
     }}
   />
 );
@@ -102,31 +108,36 @@ const Button = ({ children, onClick, variant = 'primary', type = 'button', disab
     disabled={disabled}
     style={{
       width: '100%',
-      padding: '14px 24px',
-      borderRadius: '12px',
+      padding: '16px 24px',
+      borderRadius: '16px',
       fontSize: '16px',
       fontWeight: '600',
       fontFamily: 'inherit',
       border: 'none',
       cursor: disabled ? 'not-allowed' : 'pointer',
-      transition: 'all 0.2s ease',
+      transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
       marginBottom: '16px',
       background: variant === 'primary'
-        ? (disabled ? '#ccc' : 'linear-gradient(45deg, #667eea, #764ba2)')
+        ? (disabled ? '#cbd5e1' : 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)')
         : 'transparent',
-      color: variant === 'primary' ? 'white' : '#667eea',
-      opacity: disabled ? 0.6 : 1
+      color: variant === 'primary' ? 'white' : '#6366f1',
+      opacity: disabled ? 0.7 : 1,
+      boxShadow: variant === 'primary' && !disabled ? '0 4px 12px rgba(99, 102, 241, 0.3)' : 'none',
+      position: 'relative',
+      overflow: 'hidden'
     }}
     onMouseEnter={(e) => {
       if (!disabled) {
         e.target.style.transform = 'translateY(-2px)';
-        e.target.style.boxShadow = '0 8px 20px rgba(102, 126, 234, 0.3)';
+        e.target.style.boxShadow = '0 8px 20px rgba(99, 102, 241, 0.4)';
+        e.target.style.background = 'linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)';
       }
     }}
     onMouseLeave={(e) => {
       if (!disabled) {
         e.target.style.transform = 'translateY(0)';
-        e.target.style.boxShadow = 'none';
+        e.target.style.boxShadow = '0 4px 12px rgba(99, 102, 241, 0.3)';
+        e.target.style.background = 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)';
       }
     }}
   >
@@ -140,15 +151,17 @@ const LinkButton = ({ children, onClick }) => (
     style={{
       background: 'none',
       border: 'none',
-      color: '#667eea',
+      color: '#6366f1',
       cursor: 'pointer',
       fontSize: '14px',
       fontFamily: 'inherit',
-      textDecoration: 'underline',
-      padding: 0
+      textDecoration: 'none',
+      fontWeight: '500',
+      padding: 0,
+      transition: 'color 0.2s'
     }}
-    onMouseEnter={(e) => e.target.style.color = '#764ba2'}
-    onMouseLeave={(e) => e.target.style.color = '#667eea'}
+    onMouseEnter={(e) => e.target.style.color = '#7c3aed'}
+    onMouseLeave={(e) => e.target.style.color = '#6366f1'}
   >
     {children}
   </button>

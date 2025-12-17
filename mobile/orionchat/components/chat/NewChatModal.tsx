@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, Modal, TouchableOpacity, TextInput, FlatList, ActivityIndicator, Image } from 'react-native';
+import { View, Text, StyleSheet, Modal, TouchableOpacity, TextInput, FlatList, ActivityIndicator, Image, KeyboardAvoidingView, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { api } from '@/services/api';
 import { useAuth } from '@/context/AuthContext';
@@ -113,7 +113,10 @@ export default function NewChatModal({ visible, onClose, onUserSelect }: NewChat
             presentationStyle="pageSheet"
             onRequestClose={onClose}
         >
-            <View style={styles.container}>
+            <KeyboardAvoidingView
+                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                style={styles.container}
+            >
                 <View style={styles.header}>
                     <Text style={styles.title}>New Chat</Text>
                     <TouchableOpacity onPress={onClose} style={styles.closeButton}>
@@ -168,7 +171,7 @@ export default function NewChatModal({ visible, onClose, onUserSelect }: NewChat
                         }
                     />
                 )}
-            </View>
+            </KeyboardAvoidingView>
         </Modal>
     );
 }

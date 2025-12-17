@@ -20,13 +20,14 @@ export default function ForgotPasswordScreen() {
         }
         setLoading(true);
         try {
-            const res = await forgotPassword(email);
-            // In dev mode, the token is returned. In prod, check email.
-            console.log('Reset Token:', res.token);
-            Alert.alert('Success', `Reset token generated: ${res.token}`);
+            await forgotPassword(email);
+            // Token is now sent via email, not returned
+            Alert.alert('Success', 'Password reset instructions sent to your email.');
             setStep(2);
         } catch (error: any) {
-            Alert.alert('Error', error.response?.data || 'Failed to send reset link');
+            console.error('Forgot Password Error:', error);
+            const errorMessage = error.response?.data?.message || 'Failed to send reset link';
+            Alert.alert('Error', typeof errorMessage === 'string' ? errorMessage : JSON.stringify(errorMessage));
         } finally {
             setLoading(false);
         }

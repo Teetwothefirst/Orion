@@ -62,6 +62,8 @@ router.get('/users', (req, res) => {
     });
 });
 
+const { sendResetEmail, sendPasswordChangedEmail } = require('../utils/mailer');
+
 // Forgot Password
 router.post('/forgot-password', (req, res) => {
     const { email } = req.body;
@@ -70,18 +72,23 @@ router.post('/forgot-password', (req, res) => {
         if (!user) return res.status(404).send('User not found.');
 
         // Generate token
-        const token = crypto.randomBytes(3).toString('hex').toUpperCase(); // 6 chars for easier typing
+        const token = crypto.randomBytes(3).toString('hex').toUpperCase(); // 6 chars
         const expiry = Date.now() + 3600000; // 1 hour
 
-        db.run('UPDATE users SET reset_token = ?, reset_token_expiry = ? WHERE id = ?', [token, expiry, user.id], (err) => {
+        db.run('UPDATE users SET reset_token = ?, reset_token_expiry = ? WHERE id = ?', [token, expiry, user.id], async (err) => {
             if (err) return res.status(500).send('Error updating user.');
 
-            // In a real app, send email here. 
-            // For this tutorial/dev environment, we send the token back in the response.
-            res.status(200).send({ message: 'Reset token generated.', token: token });
+            const emailSent = await sendResetEmail(email, token);
+            if (emailSent) {
+                res.status(200).send({ message: 'Password reset instructions sent to your email.' });
+            } else {
+                res.status(500).send({ message: 'Failed to send email. Please try again later.' });
+            }
         });
     });
 });
+
+// ... (existing imports)
 
 // Reset Password
 router.post('/reset-password', (req, res) => {
@@ -93,8 +100,12 @@ router.post('/reset-password', (req, res) => {
 
         const hashedPassword = bcrypt.hashSync(newPassword, 8);
 
-        db.run('UPDATE users SET password = ?, reset_token = NULL, reset_token_expiry = NULL WHERE id = ?', [hashedPassword, user.id], (err) => {
+        db.run('UPDATE users SET password = ?, reset_token = NULL, reset_token_expiry = NULL WHERE id = ?', [hashedPassword, user.id], async (err) => {
             if (err) return res.status(500).send('Error updating password.');
+
+            // Send success email
+            await sendPasswordChangedEmail(user.email);
+
             res.status(200).send({ message: 'Password has been reset.' });
         });
     });

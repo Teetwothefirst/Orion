@@ -3,12 +3,45 @@ let db;
 if (process.env.DATABASE_URL) {
     // PostgreSQL (Production)
     const { Pool } = require('pg');
-    db = new Pool({
+    const pool = new Pool({
         connectionString: process.env.DATABASE_URL,
         ssl: {
-            rejectUnauthorized: false // Required for Render/mostly cloud DBs
+            rejectUnauthorized: false
         }
     });
+
+    // Helper to convert SQLite "?" placeholders to Postgres "$1, $2..."
+    const translateParams = (sql) => {
+        let count = 1;
+        return sql.replace(/\?/g, () => `$${count++}`);
+    };
+
+    db = {
+        query: (text, params) => pool.query(translateParams(text), params),
+        get: (text, params, callback) => {
+            pool.query(translateParams(text), params, (err, res) => {
+                if (callback) callback(err, res ? res.rows[0] : null);
+            });
+        },
+        all: (text, params, callback) => {
+            pool.query(translateParams(text), params, (err, res) => {
+                if (callback) callback(err, res ? res.rows : []);
+            });
+        },
+        run: function (text, params, callback) {
+            // Postgres doesn't have this.lastID in the same way. 
+            // We append RETURNING id if it's an insert to mimic behavior for the specific usage in our routes.
+            let queryText = translateParams(text);
+            if (queryText.trim().toUpperCase().startsWith('INSERT')) {
+                queryText += ' RETURNING id';
+            }
+            pool.query(queryText, params, (err, res) => {
+                const result = res ? { lastID: res.rows[0]?.id } : {};
+                if (callback) callback.call(result, err);
+            });
+        },
+        serialize: (cb) => cb() // Noop for Postgres
+    };
     console.log('Connected to the PostgreSQL database.');
 } else {
     // SQLite (Local Development)

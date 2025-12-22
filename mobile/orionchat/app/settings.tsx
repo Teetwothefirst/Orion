@@ -2,9 +2,12 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import BugReportModal from '../components/BugReportModal';
+import { useState } from 'react';
 
 export default function SettingsScreen() {
     const router = useRouter();
+    const [isBugModalVisible, setIsBugModalVisible] = useState(false);
 
     return (
         <SafeAreaView style={styles.container}>
@@ -44,6 +47,18 @@ export default function SettingsScreen() {
                     <Ionicons name="chevron-forward" size={20} color="#666" />
                 </TouchableOpacity>
 
+                {/* Report Bug Option */}
+                <TouchableOpacity
+                    style={styles.settingItem}
+                    onPress={() => setIsBugModalVisible(true)}
+                >
+                    <View style={styles.settingInfo}>
+                        <Text style={styles.settingTitle}>Report a Bug</Text>
+                        <Text style={styles.settingDesc}>Send a report to support</Text>
+                    </View>
+                    <Ionicons name="bug-outline" size={20} color="#fb923c" />
+                </TouchableOpacity>
+
                 {/* Sign Out Option */}
                 <TouchableOpacity
                     style={[styles.settingItem, styles.signOutItem]}
@@ -55,6 +70,11 @@ export default function SettingsScreen() {
                     <Ionicons name="chevron-forward" size={20} color="#FF3B30" />
                 </TouchableOpacity>
             </View>
+
+            <BugReportModal
+                visible={isBugModalVisible}
+                onClose={() => setIsBugModalVisible(false)}
+            />
         </SafeAreaView>
     );
 }

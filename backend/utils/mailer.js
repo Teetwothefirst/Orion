@@ -57,9 +57,43 @@ const sendPasswordChangedEmail = async (to) => {
         return true;
     } catch (error) {
         console.error('Error sending success email:', error);
-        // We generally don't block the UI if this notification fails, but good to log
         return false;
     }
 };
 
-module.exports = { sendResetEmail, sendPasswordChangedEmail };
+const sendBugReportEmail = async (data) => {
+    const { user, description, deviceInfo, isCrash, stackTrace } = data;
+    const type = isCrash ? 'CRASH REPORT' : 'BUG REPORT';
+
+    // Fallback to SMTP_USER if SUPPORT_EMAIL is not set
+    const recipient = process.env.SUPPORT_EMAIL || process.env.SMTP_USER;
+
+    const mailOptions = {
+        from: `"Orion ${type}" <${process.env.SMTP_USER}>`,
+        to: recipient,
+        subject: `[${type}] ${description ? description.substring(0, 50) : 'No Description'}`,
+        html: `
+            <h3>${type}</h3>
+            <p><strong>User:</strong> ${user || 'Anonymous'}</p>
+            <p><strong>Description:</strong> ${description || 'No description provided'}</p>
+            <p><strong>Device Info:</strong></p>
+            <pre>${JSON.stringify(deviceInfo, null, 2)}</pre>
+            ${isCrash ? `
+                <p><strong>Stack Trace:</strong></p>
+                <pre style="background: #f4f4f4; padding: 10px; border: 1px solid #ddd;">${stackTrace || 'No stack trace provided'}</pre>
+            ` : ''}
+            <p><em>Sent via Orion Support System</em></p>
+        `
+    };
+
+    try {
+        await transporter.sendMail(mailOptions);
+        console.log(`${type} sent to ${recipient}`);
+        return true;
+    } catch (error) {
+        console.error(`Error sending ${type.toLowerCase()}:`, error);
+        return false;
+    }
+};
+
+module.exports = { sendResetEmail, sendPasswordChangedEmail, sendBugReportEmail };

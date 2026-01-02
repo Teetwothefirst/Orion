@@ -1,7 +1,9 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, Alert } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, Alert, Image, TextInput, ActivityIndicator, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { useAuth } from '@/context/AuthContext';
+import * as ImagePicker from 'expo-image-picker';
 
 interface Passkey {
     id: string;
@@ -11,9 +13,62 @@ interface Passkey {
 
 export default function AccountScreen() {
     const router = useRouter();
+    const { user, updateProfile } = useAuth();
+
+    const [username, setUsername] = useState(user?.username || '');
+    const [bio, setBio] = useState(user?.bio || '');
+    const [avatar, setAvatar] = useState(user?.avatar || '');
+    const [avatarFile, setAvatarFile] = useState<any>(null);
+    const [isUpdating, setIsUpdating] = useState(false);
+
     const [passkeys, setPasskeys] = useState<Passkey[]>([
         { id: '1', name: 'MACBOOK_AIR', key: 'passkey:*********************' },
     ]);
+
+    useEffect(() => {
+        if (user) {
+            setUsername(user.username);
+            setBio(user.bio || '');
+            setAvatar(user.avatar || '');
+        }
+    }, [user]);
+
+    const handlePickImage = async () => {
+        const result = await ImagePicker.launchImageLibraryAsync({
+            mediaTypes: ImagePicker.MediaTypeOptions.Images,
+            allowsEditing: true,
+            aspect: [1, 1],
+            quality: 0.8,
+        });
+
+        if (!result.canceled) {
+            const asset = result.assets[0];
+            setAvatar(asset.uri);
+            setAvatarFile({
+                uri: asset.uri,
+                type: asset.mimeType || 'image/jpeg',
+                name: asset.fileName || 'profile.jpg',
+            });
+        }
+    };
+
+    const handleSave = async () => {
+        if (!username.trim()) {
+            Alert.alert('Error', 'Username cannot be empty');
+            return;
+        }
+
+        setIsUpdating(true);
+        try {
+            await updateProfile(username, bio, avatarFile);
+            Alert.alert('Success', 'Profile updated successfully');
+        } catch (error) {
+            console.error('Update profile error:', error);
+            Alert.alert('Error', 'Failed to update profile');
+        } finally {
+            setIsUpdating(false);
+        }
+    };
 
     const handleDeletePasskey = (id: string) => {
         Alert.alert(
@@ -49,7 +104,59 @@ export default function AccountScreen() {
             </View>
 
             {/* Content */}
-            <View style={styles.content}>
+            <ScrollView style={styles.content}>
+                {/* Profile Section */}
+                <View style={styles.profileSection}>
+                    <TouchableOpacity onPress={handlePickImage} style={styles.avatarContainer}>
+                        <Image
+                            source={{ uri: avatar || 'https://i.pravatar.cc/100' }}
+                            style={styles.avatar}
+                        />
+                        <View style={styles.editAvatarIcon}>
+                            <Ionicons name="camera" size={16} color="white" />
+                        </View>
+                    </TouchableOpacity>
+                    <Text style={styles.emailText}>{user?.email}</Text>
+                </View>
+
+                {/* Form Fields */}
+                <View style={styles.formSection}>
+                    <Text style={styles.label}>Username</Text>
+                    <TextInput
+                        style={styles.input}
+                        value={username}
+                        onChangeText={setUsername}
+                        placeholder="Username"
+                        placeholderTextColor="#666"
+                    />
+
+                    <Text style={styles.label}>Bio</Text>
+                    <TextInput
+                        style={[styles.input, styles.textArea]}
+                        value={bio}
+                        onChangeText={setBio}
+                        placeholder="Tell us about yourself..."
+                        placeholderTextColor="#666"
+                        multiline
+                        numberOfLines={4}
+                    />
+                </View>
+
+                <TouchableOpacity
+                    style={[styles.saveButton, isUpdating && styles.disabledButton]}
+                    onPress={handleSave}
+                    disabled={isUpdating}
+                >
+                    {isUpdating ? (
+                        <ActivityIndicator color="white" />
+                    ) : (
+                        <Text style={styles.saveButtonText}>Save Changes</Text>
+                    )}
+                </TouchableOpacity>
+
+                <View style={styles.sectionDivider} />
+                <Text style={styles.sectionTitle}>Passkeys</Text>
+
                 {/* Passkeys List */}
                 {passkeys.map((passkey) => (
                     <View key={passkey.id} style={styles.passkeyItem}>
@@ -67,7 +174,8 @@ export default function AccountScreen() {
                 <TouchableOpacity style={styles.addButton} onPress={handleAddPasskey}>
                     <Text style={styles.addButtonText}>Add Passkey</Text>
                 </TouchableOpacity>
-            </View>
+                <View style={{ height: 40 }} />
+            </ScrollView>
         </SafeAreaView>
     );
 }
@@ -143,5 +251,83 @@ const styles = StyleSheet.create({
         color: '#121212',
         fontSize: 16,
         fontWeight: '600',
+    },
+    profileSection: {
+        alignItems: 'center',
+        marginBottom: 24,
+    },
+    avatarContainer: {
+        position: 'relative',
+        marginBottom: 8,
+    },
+    avatar: {
+        width: 100,
+        height: 100,
+        borderRadius: 50,
+        backgroundColor: '#333',
+    },
+    editAvatarIcon: {
+        position: 'absolute',
+        bottom: 0,
+        right: 0,
+        backgroundColor: '#007AFF',
+        width: 28,
+        height: 28,
+        borderRadius: 14,
+        justifyContent: 'center',
+        alignItems: 'center',
+        borderWidth: 2,
+        borderColor: '#121212',
+    },
+    emailText: {
+        color: '#888',
+        fontSize: 14,
+    },
+    formSection: {
+        marginBottom: 24,
+    },
+    label: {
+        color: '#888',
+        fontSize: 14,
+        marginBottom: 8,
+        marginLeft: 4,
+    },
+    input: {
+        backgroundColor: '#1E1E1E',
+        borderRadius: 12,
+        padding: 16,
+        color: 'white',
+        fontSize: 16,
+        marginBottom: 16,
+    },
+    textArea: {
+        height: 100,
+        textAlignVertical: 'top',
+    },
+    saveButton: {
+        backgroundColor: '#007AFF',
+        borderRadius: 12,
+        padding: 16,
+        alignItems: 'center',
+        marginBottom: 24,
+    },
+    saveButtonText: {
+        color: 'white',
+        fontSize: 16,
+        fontWeight: '600',
+    },
+    disabledButton: {
+        opacity: 0.7,
+    },
+    sectionDivider: {
+        height: 1,
+        backgroundColor: '#2C2C2C',
+        marginVertical: 24,
+    },
+    sectionTitle: {
+        color: 'white',
+        fontSize: 18,
+        fontWeight: 'bold',
+        marginBottom: 16,
     },
 });

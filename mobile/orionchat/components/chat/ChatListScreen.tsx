@@ -13,12 +13,24 @@ export default function ChatListScreen() {
     const [chats, setChats] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [showNewChatModal, setShowNewChatModal] = useState(false);
+    const [onlineUsers, setOnlineUsers] = useState<Record<number, any>>({});
     const router = useRouter();
     const { user } = useAuth();
 
     useEffect(() => {
         if (user) {
             fetchChats();
+
+            socket.on('user_status', (data) => {
+                setOnlineUsers(prev => ({
+                    ...prev,
+                    [data.userId]: { status: data.status, lastSeen: data.lastSeen }
+                }));
+            });
+
+            return () => {
+                socket.off('user_status');
+            };
         }
     }, [user]);
 
@@ -72,17 +84,31 @@ export default function ChatListScreen() {
         });
     };
 
-    const renderItem = ({ item }: { item: any }) => (
-        <TouchableOpacity style={styles.chatItem} onPress={() => handleChatPress(item.id)}>
-            <View style={styles.chatInfo}>
-                <Text style={styles.chatTitle}>{item.name}</Text>
-                <Text style={styles.chatDesc} numberOfLines={1}>
-                    {item.last_message || 'No messages yet'}
-                </Text>
-            </View>
-            <Ionicons name="chevron-forward" size={20} color="#666" />
-        </TouchableOpacity>
-    );
+    const renderItem = ({ item }: { item: any }) => {
+        const isOnline = item.type === 'private' && onlineUsers[item.other_user_id]?.status === 'online';
+
+        return (
+            <TouchableOpacity style={styles.chatItem} onPress={() => handleChatPress(item.id)}>
+                <View style={styles.avatarContainer}>
+                    <Image
+                        source={{ uri: item.avatar || 'https://i.pravatar.cc/100' }}
+                        style={styles.chatAvatar}
+                    />
+                    {isOnline && <View style={styles.onlineDot} />}
+                </View>
+                <View style={styles.chatInfo}>
+                    <Text style={styles.chatTitle}>{item.name}</Text>
+                    <Text style={styles.chatDesc} numberOfLines={1}>
+                        {item.last_message_type === 'image' ? '📷 Photo' :
+                            item.last_message_type === 'video' ? '📹 Video' :
+                                item.last_message_type === 'document' ? '📄 Document' :
+                                    (item.last_message || 'No messages yet')}
+                    </Text>
+                </View>
+                <Ionicons name="chevron-forward" size={20} color="#666" />
+            </TouchableOpacity>
+        );
+    };
 
     return (
         <SafeAreaView style={styles.container}>
@@ -190,6 +216,27 @@ const styles = StyleSheet.create({
     },
     chatInfo: {
         flex: 1,
+    },
+    avatarContainer: {
+        position: 'relative',
+        marginRight: 16,
+    },
+    chatAvatar: {
+        width: 50,
+        height: 50,
+        borderRadius: 25,
+        backgroundColor: '#333',
+    },
+    onlineDot: {
+        position: 'absolute',
+        bottom: 2,
+        right: 2,
+        width: 12,
+        height: 12,
+        borderRadius: 6,
+        backgroundColor: '#4CD964',
+        borderWidth: 2,
+        borderColor: '#1E1E1E',
     },
     chatTitle: {
         fontSize: 16,

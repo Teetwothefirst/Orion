@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Search, MoreHorizontal, Send, Home, MessageCircle, Users, Heart, Bell, Plus, X } from 'lucide-react';
+import { Search, MoreHorizontal, Send, Home, MessageCircle, Users, Heart, Bell, Plus, X, Paperclip, Check, CheckCheck, Reply, Forward, FileText, Play } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from './context/AuthContext.jsx';
 import { api, socket } from './services/api.js';
@@ -13,12 +13,16 @@ const ChatInterface = () => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const messagesEndRef = useRef(null);
-  const [showNewChatModal, setShowNewChatModal] = useState(false);
-  const [availableUsers, setAvailableUsers] = useState([]);
-  const [userSearchQuery, setUserSearchQuery] = useState('');
-  const [showProfileSettings, setShowProfileSettings] = useState(false);
-  const [activeTab, setActiveTab] = useState('chat'); // 'chat' or 'group'
   const [showBugReport, setShowBugReport] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const [replyTo, setReplyTo] = useState(null);
+  const [showForwardModal, setShowForwardModal] = useState(false);
+  const [forwardingMessage, setForwardingMessage] = useState(null);
+  const [onlineUsers, setOnlineUsers] = useState({}); // { userId: { status, lastSeen } }
+  const [showProfileModal, setShowProfileModal] = useState(false);
+  const [profileForm, setProfileForm] = useState({ username: '', bio: '', avatar: null });
+  const fileInputRef = useRef(null);
+  const profileImageRef = useRef(null);
 
 
 
@@ -32,20 +36,63 @@ const ChatInterface = () => {
     socket.on('receive_message', (message) => {
       if (selectedContact && message.chat_id === selectedContact.id) {
         setMessages((prev) => [...prev, {
+          id: message.id,
           sender: message.username,
           message: message.content,
+          type: message.type,
+          media_url: message.media_url,
+          status: message.status,
+          reply_to_id: message.reply_to_id,
+          reply_content: message.reply_content,
+          reply_sender_id: message.reply_sender_id,
+          forwarded_from_id: message.forwarded_from_id,
           time: new Date(message.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
           isOwn: message.sender_id === user.id,
           avatar: message.avatar
         }]);
+
+        // If message is for active chat and not from self, mark it as read immediately
+        if (message.sender_id !== user.id) {
+          socket.emit('message_read', { chatId: selectedContact.id, userId: user.id });
+        }
+
         scrollToBottom();
       }
-      // Refresh contacts to update last message
       fetchContacts();
     });
 
+    socket.on('status_update', (data) => {
+      setMessages(prev => prev.map(m => m.id === data.messageId ? { ...m, status: data.status } : m));
+    });
+
+    socket.on('chat_read', (data) => {
+      if (selectedContact && data.chatId === selectedContact.id) {
+        setMessages(prev => prev.map(m => m.isOwn ? { ...m, status: 'read' } : m));
+      }
+    });
+
+    // Mark current chat as read when focused
+    if (selectedContact) {
+      socket.emit('message_read', { chatId: selectedContact.id, userId: user.id });
+    }
+
+    socket.on('user_status', (data) => {
+      setOnlineUsers(prev => ({
+        ...prev,
+        [data.userId]: { status: data.status, lastSeen: data.lastSeen }
+      }));
+    });
+
+    if (user) {
+      socket.emit('user_online', user.id);
+      setProfileForm({ username: user.username, bio: user.bio || '', avatar: user.avatar });
+    }
+
     return () => {
       socket.off('receive_message');
+      socket.off('status_update');
+      socket.off('chat_read');
+      socket.off('user_status');
     };
   }, [user, selectedContact]);
 
@@ -64,10 +111,13 @@ const ChatInterface = () => {
         name: chat.name || chat.group_name, // Backend might return group_name separately
         type: chat.type || 'private',
         lastMessage: chat.last_message || 'No messages yet',
+        lastMessageType: chat.last_message_type,
         time: chat.last_message_time ? new Date(chat.last_message_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '',
-        avatar: chat.type === 'private' ? '👤' : '👥',
+        avatar: chat.avatar || (chat.type === 'private' ? '👤' : '👥'),
+        bio: chat.bio,
+        lastSeen: chat.last_seen,
         unread: false,
-        online: true
+        online: false // Will be updated by onlineUsers state
       }));
       setContacts(formattedContacts);
     } catch (error) {
@@ -79,8 +129,16 @@ const ChatInterface = () => {
     try {
       const response = await api.get(`/chats/${chatId}/messages`);
       const formattedMessages = response.data.map(msg => ({
+        id: msg.id,
         sender: msg.username,
         message: msg.content,
+        type: msg.type,
+        media_url: msg.media_url,
+        status: msg.status,
+        reply_to_id: msg.reply_to_id,
+        reply_content: msg.reply_content,
+        reply_sender_id: msg.reply_sender_id,
+        forwarded_from_id: msg.forwarded_from_id,
         time: new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         isOwn: msg.sender_id === user.id,
         avatar: msg.avatar
@@ -92,17 +150,98 @@ const ChatInterface = () => {
     }
   };
 
-  const handleSendMessage = () => {
-    if (!messageInput.trim() || !selectedContact) return;
+  const handleSendMessage = (overrideData = {}) => {
+    if ((!messageInput.trim() && !overrideData.media_url) || !selectedContact) return;
 
     const messageData = {
       chatId: selectedContact.id,
       senderId: user.id,
-      content: messageInput
+      content: messageInput,
+      type: 'text',
+      ...overrideData
     };
+
+    if (replyTo) {
+      messageData.reply_to_id = replyTo.id;
+      setReplyTo(null);
+    }
 
     socket.emit('send_message', messageData);
     setMessageInput('');
+  };
+
+  const handleFileUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    setIsUploading(true);
+    try {
+      const response = await api.post('/chats/upload', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+
+      handleSendMessage({
+        content: `Sent a \${response.data.type}`,
+        type: response.data.type,
+        media_url: response.data.url
+      });
+    } catch (error) {
+      console.error('Error uploading file:', error);
+      alert('Failed to upload file');
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const confirmForward = (chatId) => {
+    if (!forwardingMessage) return;
+
+    const messageData = {
+      chatId: chatId,
+      senderId: user.id,
+      content: forwardingMessage.message,
+      type: forwardingMessage.type,
+      media_url: forwardingMessage.media_url,
+      forwarded_from_id: forwardingMessage.id
+    };
+
+    socket.emit('send_message', messageData);
+    setShowForwardModal(false);
+    setForwardingMessage(null);
+
+    // Switch to the chat if not already there?
+    const contact = contacts.find(c => c.id === chatId);
+    if (contact) {
+      setSelectedContact(contact);
+    }
+  };
+
+  const handleUpdateProfile = async (e) => {
+    e.preventDefault();
+    const formData = new FormData();
+    formData.append('userId', user.id);
+    formData.append('username', profileForm.username);
+    formData.append('bio', profileForm.bio);
+    if (profileForm.avatarFile) {
+      formData.append('avatar', profileForm.avatarFile);
+    }
+
+    try {
+      const response = await api.put('/users/profile', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      // Update local user state if necessary, but AuthContext usually handles it
+      // For now, we manually update the local form and close modal
+      setShowProfileModal(false);
+      alert('Profile updated successfully!');
+      window.location.reload(); // Simple way to refresh user data from AuthContext/Storage
+    } catch (error) {
+      console.error('Error updating profile:', error);
+      alert(error.response?.data || 'Failed to update profile');
+    }
   };
 
   const scrollToBottom = () => {
@@ -180,11 +319,15 @@ const ChatInterface = () => {
           </div>
           <div
             style={{ ...styles.userSection, cursor: 'pointer' }}
-            onClick={() => setShowProfileSettings(true)}
+            onClick={() => setShowProfileModal(true)}
             title="Profile Settings"
           >
             <div style={styles.userAvatar}>
-              <span>👤</span>
+              {user?.avatar ? (
+                <img src={user.avatar} alt="Avatar" style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} />
+              ) : (
+                <span>👤</span>
+              )}
             </div>
             <span style={styles.userName}>{user?.username || 'User'}</span>
           </div>
@@ -243,9 +386,13 @@ const ChatInterface = () => {
               >
                 <div style={styles.avatarContainer}>
                   <div style={styles.avatar}>
-                    {contact.avatar}
+                    {contact.avatar && contact.avatar.startsWith('http') ? (
+                      <img src={contact.avatar} alt="Avatar" style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} />
+                    ) : (
+                      contact.avatar
+                    )}
                   </div>
-                  {contact.online && (
+                  {(onlineUsers[contact.id]?.status === 'online' || contact.online) && (
                     <div style={styles.onlineIndicator}></div>
                   )}
                 </div>
@@ -288,220 +435,399 @@ const ChatInterface = () => {
           }}>Logout</button>
         </div>
       </div>
-    </div>
 
-    {/* Main Chat Area */ }
-  <div style={styles.mainChat}>
-    {selectedContact ? (
-      <>
-        {/* Chat Header */}
-        <div style={styles.chatHeader}>
-          <div style={styles.chatHeaderLeft}>
-            <div style={styles.chatAvatar}>
-              👤
-            </div>
-            <div>
-              <h3 style={styles.chatName}>{selectedContact.name}</h3>
-              <p style={styles.chatStatus}>Online</p>
-            </div>
-          </div>
-          <div style={styles.chatHeaderRight}>
-            <Search size={20} style={styles.chatIcon} />
-            <MoreHorizontal size={20} style={styles.chatIcon} />
-          </div>
-        </div>
-
-        {/* Messages */}
-        <div style={styles.messagesContainer}>
-          {messages.map((message, index) => (
-            <div
-              key={index}
-              style={{
-                ...styles.messageRow,
-                justifyContent: message.isOwn ? 'flex-end' : 'flex-start'
-              }}
-            >
-              {!message.isOwn && (
-                <div style={styles.messageAvatar}>
-                  👤
+      {/* Main Chat Area */}
+      <div style={styles.mainChat}>
+        {selectedContact ? (
+          <>
+            {/* Chat Header */}
+            <div style={styles.chatHeader}>
+              <div style={styles.chatHeaderLeft}>
+                <div style={styles.chatAvatar}>
+                  {selectedContact.avatar && selectedContact.avatar.startsWith('http') ? (
+                    <img src={selectedContact.avatar} alt="Avatar" style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} />
+                  ) : (
+                    '👤'
+                  )}
                 </div>
-              )}
-              <div
-                style={{
-                  ...styles.messageBubble,
-                  ...(message.isOwn ? styles.messageBubbleOwn : styles.messageBubbleOther)
-                }}
-              >
-                <p style={styles.messageText}>{message.message}</p>
-                {message.time && (
-                  <p style={{
-                    ...styles.messageTime,
-                    color: message.isOwn ? 'rgba(255,255,255,0.7)' : '#9CA3AF'
-                  }}>
-                    {message.time}
+                <div>
+                  <h3 style={styles.chatName}>{selectedContact.name}</h3>
+                  <p style={styles.chatStatus}>
+                    {onlineUsers[selectedContact.id]?.status === 'online' ? (
+                      <span style={{ color: '#10b981' }}>Online</span>
+                    ) : onlineUsers[selectedContact.id]?.lastSeen || selectedContact.lastSeen ? (
+                      `Last seen \${new Date(onlineUsers[selectedContact.id]?.lastSeen || selectedContact.lastSeen).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+                    ) : (
+                      'Last seen recently'
+                    )}
                   </p>
-                )}
-              </div>
-              {message.isOwn && (
-                <div style={styles.messageAvatarOwn}>
-                  👤
                 </div>
-              )}
+              </div>
+              <div style={styles.chatHeaderRight}>
+                <Search size={20} style={styles.chatIcon} />
+                <MoreHorizontal size={20} style={styles.chatIcon} />
+              </div>
             </div>
-          ))}
-          <div ref={messagesEndRef} />
-        </div>
 
-        {/* Message Input */}
-        <div style={styles.messageInput}>
-          <div style={styles.inputContainer}>
-            <input
-              type="text"
-              value={messageInput}
-              onChange={(e) => setMessageInput(e.target.value)}
-              onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
-              placeholder="Type a message"
-              style={styles.input}
-            />
-            <button style={styles.sendButton} onClick={handleSendMessage}>
-              <Send size={18} />
-            </button>
-          </div>
-        </div>
-      </>
-    ) : (
-      <div style={{ flex: 1, display: 'flex', justifyContent: 'center', alignItems: 'center', flexDirection: 'column', color: '#6b7280' }}>
-        <MessageCircle size={64} style={{ marginBottom: '16px', opacity: 0.5 }} />
-        <h3>Select a chat to start messaging</h3>
-      </div>
-    )}
-  </div>
-
-  {/* Right Sidebar - Optional, hidden for now or static */ }
-  {/* <div style={styles.rightSidebar}> ... </div> */ }
-  {/* New Chat Modal */ }
-  {
-    showNewChatModal && (
-      <div style={styles.modalOverlay} onClick={() => setShowNewChatModal(false)}>
-        <div style={styles.modalContent} onClick={(e) => e.stopPropagation()}>
-          <div style={styles.modalHeader}>
-            <h2 style={styles.modalTitle}>
-              {activeTab === 'group' ? 'New Group Chat' : 'Start New Chat'}
-            </h2>
-            <X
-              size={24}
-              style={{ cursor: 'pointer', color: '#6b7280' }}
-              onClick={() => setShowNewChatModal(false)}
-            />
-          </div>
-
-          {/* Group Creation UI */}
-          {activeTab === 'group' && (
-            <div style={{ padding: '0 16px 16px 16px', display: 'flex', gap: '8px' }}>
-              <input
-                type="text"
-                placeholder="Group Name"
-                style={{ ...styles.searchInput, flex: 1 }}
-                id="groupNameInput"
-              />
-              <button
-                style={{ ...styles.sendButton, borderRadius: '8px', width: 'auto', padding: '0 16px' }}
-                onClick={() => {
-                  const name = document.getElementById('groupNameInput').value;
-                  const selectedCheckboxes = document.querySelectorAll('input[name="userSelect"]:checked');
-                  const selectedIds = Array.from(selectedCheckboxes).map(cb => cb.value);
-
-                  if (!name) return alert('Please enter a group name');
-                  if (selectedIds.length === 0) return alert('Please select at least one member');
-
-                  // Call API to create group
-                  // For now, reusing handleStartChat logic but adapted
-                  api.post('/chats', {
-                    userId: user.id,
-                    type: 'group',
-                    name: name,
-                    participantIds: selectedIds
-                  }).then(async (response) => {
-                    setShowNewChatModal(false);
-                    await fetchContacts();
-                    // Select the new chat
-                    // Logic similar to handleStartChat
-                    const chatResponse = await api.get(`/chats?userId=${user.id}`);
-                    const chat = chatResponse.data.find(c => c.id === response.data.id);
-                    if (chat) {
-                      setSelectedContact({
-                        id: chat.id,
-                        name: chat.name || chat.group_name,
-                        type: chat.type,
-                        lastMessage: chat.last_message || 'No messages yet',
-                        time: '',
-                        avatar: '👥',
-                        unread: false,
-                        online: true
-                      });
-                    }
-                  }).catch(err => console.error(err));
-                }}
-              >
-                Create
-              </button>
-            </div>
-          )}
-
-          <input
-            type="text"
-            placeholder="Search users..."
-            value={userSearchQuery}
-            onChange={(e) => setUserSearchQuery(e.target.value)}
-            style={styles.searchInput}
-            autoFocus
-          />
-
-          <div style={styles.userList}>
-            {filteredUsers.length > 0 ? (
-              filteredUsers.map((u) => (
+            {/* Messages */}
+            <div style={styles.messagesContainer}>
+              {messages.map((message, index) => (
                 <div
-                  key={u.id}
-                  style={styles.userItem}
-                  onClick={() => {
-                    if (activeTab === 'chat') {
-                      handleStartChat(u);
-                    } else {
-                      // Toggle checkbox if clicking row in group mode
-                      const cb = document.getElementById(`user-cb-${u.id}`);
-                      if (cb) cb.click();
-                    }
+                  key={index}
+                  style={{
+                    ...styles.messageRow,
+                    justifyContent: message.isOwn ? 'flex-end' : 'flex-start'
                   }}
                 >
-                  {activeTab === 'group' && (
-                    <input
-                      type="checkbox"
-                      name="userSelect"
-                      value={u.id}
-                      id={`user-cb-${u.id}`}
-                      onClick={(e) => e.stopPropagation()}
-                      style={{ marginRight: '12px' }}
-                    />
+                  {!message.isOwn && (
+                    <div style={styles.messageAvatar}>
+                      👤
+                    </div>
                   )}
-                  <div style={styles.userItemAvatar}>👤</div>
-                  <div style={styles.userItemInfo}>
-                    <p style={styles.userItemName}>{u.username}</p>
-                    <p style={styles.userItemEmail}>{u.email}</p>
+                  <div
+                    style={{
+                      ...styles.messageBubble,
+                      ...(message.isOwn ? styles.messageBubbleOwn : styles.messageBubbleOther)
+                    }}
+                  >
+                    {message.reply_to_id && (
+                      <div style={styles.replyContext}>
+                        <p style={styles.replySender}>
+                          {message.reply_sender_id === user.id ? 'You' : message.sender}
+                        </p>
+                        <p style={styles.replySnippet}>{message.reply_content}</p>
+                      </div>
+                    )}
+
+                    {message.type === 'image' && (
+                      <img src={message.media_url} alt="Shared" style={styles.mediaImage} />
+                    )}
+
+                    {message.type === 'video' && (
+                      <video src={message.media_url} controls style={styles.mediaVideo} />
+                    )}
+
+                    {message.type === 'document' && (
+                      <a href={message.media_url} target="_blank" rel="noopener noreferrer" style={styles.mediaDoc}>
+                        <FileText size={24} />
+                        <span>{message.message || 'Document'}</span>
+                      </a>
+                    )}
+
+                    {message.type === 'text' && (
+                      <p style={styles.messageText}>{message.message}</p>
+                    )}
+
+                    <div style={styles.messageMeta}>
+                      {message.time && (
+                        <p style={{
+                          ...styles.messageTime,
+                          color: message.isOwn ? 'rgba(255,255,255,0.7)' : '#9CA3AF'
+                        }}>
+                          {message.time}
+                        </p>
+                      )}
+                      {message.isOwn && (
+                        <div style={styles.statusIcon}>
+                          {message.status === 'sent' && <Check size={14} color="rgba(255,255,255,0.7)" />}
+                          {message.status === 'delivered' && <CheckCheck size={14} color="rgba(255,255,255,0.7)" />}
+                          {message.status === 'read' && <CheckCheck size={14} color="#60a5fa" />}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Message Hover Actions */}
+                    <div style={styles.messageActions}>
+                      <Reply size={16} style={styles.actionIcon} onClick={() => setReplyTo(message)} />
+                      <Forward size={16} style={styles.actionIcon} onClick={() => {
+                        setForwardingMessage(message);
+                        setShowForwardModal(true);
+                      }} />
+                    </div>
                   </div>
+                  {
+                    message.isOwn && (
+                      <div style={styles.messageAvatarOwn}>
+                        👤
+                      </div>
+                    )
+                  }
                 </div>
-              ))
-            ) : (
-              <div style={styles.emptyState}>
-                <p>No users found</p>
+              ))}
+              <div ref={messagesEndRef} />
+            </div>
+
+            {/* Message Input */}
+            <div style={styles.messageInput}>
+              {replyTo && (
+                <div style={styles.replyPreview}>
+                  <div style={styles.replyPreviewContent}>
+                    <p style={styles.replyPreviewSender}>Replying to {replyTo.sender}</p>
+                    <p style={styles.replyPreviewText}>{replyTo.message}</p>
+                  </div>
+                  <X size={18} style={{ cursor: 'pointer' }} onClick={() => setReplyTo(null)} />
+                </div>
+              )}
+              <div style={styles.inputContainer}>
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  style={{ display: 'none' }}
+                  onChange={handleFileUpload}
+                />
+                <button
+                  style={styles.attachButton}
+                  onClick={() => fileInputRef.current.click()}
+                  disabled={isUploading}
+                >
+                  {isUploading ? <div style={styles.spinner}></div> : <Paperclip size={20} />}
+                </button>
+                <input
+                  type="text"
+                  value={messageInput}
+                  onChange={(e) => setMessageInput(e.target.value)}
+                  onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
+                  placeholder="Type a message"
+                  style={styles.input}
+                />
+                <button style={styles.sendButton} onClick={() => handleSendMessage()}>
+                  <Send size={18} />
+                </button>
               </div>
-            )}
+            </div>
+          </>
+        ) : (
+          <div style={{ flex: 1, display: 'flex', justifyContent: 'center', alignItems: 'center', flexDirection: 'column', color: '#6b7280' }}>
+            <MessageCircle size={64} style={{ marginBottom: '16px', opacity: 0.5 }} />
+            <h3>Select a chat to start messaging</h3>
+          </div>
+        )}
+      </div>
+
+      {/* Right Sidebar - Optional, hidden for now or static */}
+      {/* <div style={styles.rightSidebar}> ... </div> */}
+      {/* New Chat Modal */}
+      {
+        showNewChatModal && (
+          <div style={styles.modalOverlay} onClick={() => setShowNewChatModal(false)}>
+            <div style={styles.modalContent} onClick={(e) => e.stopPropagation()}>
+              <div style={styles.modalHeader}>
+                <h2 style={styles.modalTitle}>
+                  {activeTab === 'group' ? 'New Group Chat' : 'Start New Chat'}
+                </h2>
+                <X
+                  size={24}
+                  style={{ cursor: 'pointer', color: '#6b7280' }}
+                  onClick={() => setShowNewChatModal(false)}
+                />
+              </div>
+
+              {/* Group Creation UI */}
+              {activeTab === 'group' && (
+                <div style={{ padding: '0 16px 16px 16px', display: 'flex', gap: '8px' }}>
+                  <input
+                    type="text"
+                    placeholder="Group Name"
+                    style={{ ...styles.searchInput, flex: 1 }}
+                    id="groupNameInput"
+                  />
+                  <button
+                    style={{ ...styles.sendButton, borderRadius: '8px', width: 'auto', padding: '0 16px' }}
+                    onClick={() => {
+                      const name = document.getElementById('groupNameInput').value;
+                      const selectedCheckboxes = document.querySelectorAll('input[name="userSelect"]:checked');
+                      const selectedIds = Array.from(selectedCheckboxes).map(cb => cb.value);
+
+                      if (!name) return alert('Please enter a group name');
+                      if (selectedIds.length === 0) return alert('Please select at least one member');
+
+                      // Call API to create group
+                      // For now, reusing handleStartChat logic but adapted
+                      api.post('/chats', {
+                        userId: user.id,
+                        type: 'group',
+                        name: name,
+                        participantIds: selectedIds
+                      }).then(async (response) => {
+                        setShowNewChatModal(false);
+                        await fetchContacts();
+                        // Select the new chat
+                        // Logic similar to handleStartChat
+                        const chatResponse = await api.get(`/chats?userId=${user.id}`);
+                        const chat = chatResponse.data.find(c => c.id === response.data.id);
+                        if (chat) {
+                          setSelectedContact({
+                            id: chat.id,
+                            name: chat.name || chat.group_name,
+                            type: chat.type,
+                            lastMessage: chat.last_message || 'No messages yet',
+                            time: '',
+                            avatar: '👥',
+                            unread: false,
+                            online: true
+                          });
+                        }
+                      }).catch(err => console.error(err));
+                    }}
+                  >
+                    Create
+                  </button>
+                </div>
+              )}
+
+              <input
+                type="text"
+                placeholder="Search users..."
+                value={userSearchQuery}
+                onChange={(e) => setUserSearchQuery(e.target.value)}
+                style={styles.searchInput}
+                autoFocus
+              />
+
+              <div style={styles.userList}>
+                {filteredUsers.length > 0 ? (
+                  filteredUsers.map((u) => (
+                    <div
+                      key={u.id}
+                      style={styles.userItem}
+                      onClick={() => {
+                        if (activeTab === 'chat') {
+                          handleStartChat(u);
+                        } else {
+                          // Toggle checkbox if clicking row in group mode
+                          const cb = document.getElementById(`user-cb-${u.id}`);
+                          if (cb) cb.click();
+                        }
+                      }}
+                    >
+                      {activeTab === 'group' && (
+                        <input
+                          type="checkbox"
+                          name="userSelect"
+                          value={u.id}
+                          id={`user-cb-${u.id}`}
+                          onClick={(e) => e.stopPropagation()}
+                          style={{ marginRight: '12px' }}
+                        />
+                      )}
+                      <div style={styles.userItemAvatar}>👤</div>
+                      <div style={styles.userItemInfo}>
+                        <p style={styles.userItemName}>{u.username}</p>
+                        <p style={styles.userItemEmail}>{u.email}</p>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div style={styles.emptyState}>
+                    <p>No users found</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )
+      }
+
+      {/* Bug Report Modal */}
+      {showBugReport && <BugReportModal onClose={() => setShowBugReport(false)} />}
+
+      {/* Profile Modal */}
+      {showProfileModal && (
+        <div style={styles.modalOverlay} onClick={() => setShowProfileModal(false)}>
+          <div style={styles.modalContent} onClick={(e) => e.stopPropagation()}>
+            <div style={styles.modalHeader}>
+              <h2 style={styles.modalTitle}>Edit Profile</h2>
+              <X size={24} style={{ cursor: 'pointer', color: '#6b7280' }} onClick={() => setShowProfileModal(false)} />
+            </div>
+            <form onSubmit={handleUpdateProfile} style={{ padding: '16px' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: '20px' }}>
+                <div
+                  style={{ ...styles.userAvatar, width: '80px', height: '80px', fontSize: '32px', cursor: 'pointer', marginBottom: '10px' }}
+                  onClick={() => profileImageRef.current.click()}
+                >
+                  {profileForm.avatar ? (
+                    <img src={profileForm.avatar} alt="Avatar" style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} />
+                  ) : '👤'}
+                </div>
+                <input
+                  type="file"
+                  ref={profileImageRef}
+                  hidden
+                  accept="image/*"
+                  onChange={(e) => {
+                    const file = e.target.files[0];
+                    if (file) {
+                      setProfileForm({ ...profileForm, avatar: URL.createObjectURL(file), avatarFile: file });
+                    }
+                  }}
+                />
+                <span style={{ fontSize: '12px', color: '#6b7280' }}>Click to change avatar</span>
+              </div>
+              <div style={{ marginBottom: '15px' }}>
+                <label style={{ display: 'block', fontSize: '14px', marginBottom: '5px', color: '#374151' }}>Username</label>
+                <input
+                  type="text"
+                  value={profileForm.username}
+                  onChange={(e) => setProfileForm({ ...profileForm, username: e.target.value })}
+                  style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #d1d5db' }}
+                />
+              </div>
+              <div style={{ marginBottom: '20px' }}>
+                <label style={{ display: 'block', fontSize: '14px', marginBottom: '5px', color: '#374151' }}>Bio</label>
+                <textarea
+                  value={profileForm.bio}
+                  onChange={(e) => setProfileForm({ ...profileForm, bio: e.target.value })}
+                  placeholder="Tell us about yourself..."
+                  style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #d1d5db', height: '80px', resize: 'none' }}
+                />
+              </div>
+              <button
+                type="submit"
+                style={{ width: '100%', padding: '10px', backgroundColor: '#000', color: 'white', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' }}
+              >
+                Save Changes
+              </button>
+            </form>
           </div>
         </div>
-      </div>
-    
-    {/* Bug Report Modal */ }
-    { showBugReport && <BugReportModal onClose={() => setShowBugReport(false)} /> }
-  </div >
+      )}
+
+      {/* Forward Selection Modal */}
+      {showForwardModal && (
+        <div style={styles.modalOverlay} onClick={() => setShowForwardModal(false)}>
+          <div style={styles.modalContent} onClick={(e) => e.stopPropagation()}>
+            <div style={styles.modalHeader}>
+              <h2 style={styles.modalTitle}>Forward Message</h2>
+              <X
+                size={24}
+                style={{ cursor: 'pointer', color: '#6b7280' }}
+                onClick={() => setShowForwardModal(false)}
+              />
+            </div>
+
+            <div style={{ padding: '0 16px 16px 16px', color: '#6b7280', fontSize: '14px' }}>
+              Select a contact to forward this message to.
+            </div>
+
+            <div style={styles.userList}>
+              {contacts.map((contact) => (
+                <div
+                  key={contact.id}
+                  style={styles.userItem}
+                  onClick={() => confirmForward(contact.id)}
+                >
+                  <div style={styles.userItemAvatar}>{contact.avatar || '👤'}</div>
+                  <div style={styles.userItemInfo}>
+                    <p style={styles.userItemName}>{contact.name}</p>
+                    <p style={styles.userItemEmail}>{contact.lastMessage}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
   );
 };
 
@@ -971,6 +1297,116 @@ const styles = {
     alignItems: 'center',
     marginBottom: '24px',
     flexShrink: 0
+  },
+  replyContext: {
+    backgroundColor: 'rgba(0, 0, 0, 0.05)',
+    borderLeft: '4px solid #3b82f6',
+    padding: '4px 8px',
+    borderRadius: '4px',
+    marginBottom: '8px',
+    fontSize: '12px'
+  },
+  replySender: {
+    fontWeight: 'bold',
+    margin: 0,
+    color: '#3b82f6'
+  },
+  replySnippet: {
+    margin: 0,
+    whiteSpace: 'nowrap',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    opacity: 0.8
+  },
+  mediaImage: {
+    maxWidth: '100%',
+    borderRadius: '8px',
+    marginBottom: '8px',
+    cursor: 'pointer'
+  },
+  mediaVideo: {
+    maxWidth: '100%',
+    borderRadius: '8px',
+    marginBottom: '8px'
+  },
+  mediaDoc: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '12px',
+    padding: '12px',
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: '8px',
+    textDecoration: 'none',
+    color: 'inherit',
+    marginBottom: '8px'
+  },
+  messageMeta: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    gap: '4px',
+    marginTop: '4px'
+  },
+  statusIcon: {
+    display: 'flex',
+    alignItems: 'center'
+  },
+  messageActions: {
+    position: 'absolute',
+    right: '-30px',
+    top: '50%',
+    transform: 'translateY(-50%)',
+    display: 'none',
+    gap: '8px'
+  },
+  actionIcon: {
+    cursor: 'pointer',
+    opacity: 0.6,
+    transition: 'opacity 0.2s',
+    ':hover': { opacity: 1 }
+  },
+  replyPreview: {
+    padding: '8px 16px',
+    backgroundColor: 'rgba(0, 0, 0, 0.05)',
+    borderLeft: '4px solid #3b82f6',
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center'
+  },
+  replyPreviewContent: {
+    overflow: 'hidden'
+  },
+  replyPreviewSender: {
+    fontWeight: 'bold',
+    fontSize: '12px',
+    margin: 0,
+    color: '#3b82f6'
+  },
+  replyPreviewText: {
+    fontSize: '12px',
+    margin: 0,
+    whiteSpace: 'nowrap',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    opacity: 0.8
+  },
+  attachButton: {
+    background: 'none',
+    border: 'none',
+    padding: '8px',
+    cursor: 'pointer',
+    color: '#6b7280',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  spinner: {
+    width: '20px',
+    height: '20px',
+    border: '2px solid #f3f4f6',
+    borderTop: '2px solid #3b82f6',
+    borderRadius: '50%',
+    animation: 'spin 1s linear infinite'
   },
   modalTitle: {
     fontSize: '20px',

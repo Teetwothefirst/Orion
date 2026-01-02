@@ -89,6 +89,8 @@ const initDb = () => {
             email TEXT UNIQUE,
             password TEXT,
             avatar TEXT,
+            bio TEXT,
+            last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             reset_token TEXT,
             reset_token_expiry BIGINT
         )`,
@@ -108,6 +110,11 @@ const initDb = () => {
             chat_id INTEGER,
             sender_id INTEGER,
             content TEXT,
+            type TEXT DEFAULT 'text',
+            media_url TEXT,
+            status TEXT DEFAULT 'sent',
+            reply_to_id INTEGER,
+            forwarded_from_id INTEGER,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )`
     ];
@@ -120,6 +127,14 @@ const initDb = () => {
             // Migration for existing databases
             db.run("ALTER TABLE users ADD COLUMN reset_token TEXT", (err) => { /* ignore */ });
             db.run("ALTER TABLE users ADD COLUMN reset_token_expiry INTEGER", (err) => { /* ignore */ });
+            db.run("ALTER TABLE users ADD COLUMN bio TEXT", (err) => { /* ignore */ });
+            db.run("ALTER TABLE users ADD COLUMN last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP", (err) => { /* ignore */ });
+            // Messaging Phase 2 migrations
+            db.run("ALTER TABLE messages ADD COLUMN type TEXT DEFAULT 'text'", (err) => { /* ignore */ });
+            db.run("ALTER TABLE messages ADD COLUMN media_url TEXT", (err) => { /* ignore */ });
+            db.run("ALTER TABLE messages ADD COLUMN status TEXT DEFAULT 'sent'", (err) => { /* ignore */ });
+            db.run("ALTER TABLE messages ADD COLUMN reply_to_id INTEGER", (err) => { /* ignore */ });
+            db.run("ALTER TABLE messages ADD COLUMN forwarded_from_id INTEGER", (err) => { /* ignore */ });
         });
     }
 };

@@ -1,13 +1,27 @@
 const express = require('express');
 const db = require('../db');
+const multer = require('multer');
+const cloudinary = require('../utils/cloudinary');
+const { CloudinaryStorage } = require('multer-storage-cloudinary');
 
 const router = express.Router();
+
+// Multer & Cloudinary Storage for Profile Pictures
+const storage = new CloudinaryStorage({
+    cloudinary: cloudinary,
+    params: {
+        folder: 'orion_profiles',
+        allowed_formats: ['jpg', 'jpeg', 'png']
+    }
+});
+
+const upload = multer({ storage: storage });
 
 // Get all users (excluding the current user)
 router.get('/', (req, res) => {
     const currentUserId = req.query.currentUserId;
 
-    let sql = 'SELECT id, username, email, avatar FROM users';
+    let sql = 'SELECT id, username, email, avatar, bio, last_seen FROM users';
     const params = [];
 
     if (currentUserId) {
@@ -33,7 +47,7 @@ router.get('/search', (req, res) => {
     }
 
     let sql = `
-        SELECT id, username, email, avatar 
+        SELECT id, username, email, avatar, bio, last_seen 
         FROM users 
         WHERE (username LIKE ? OR email LIKE ?)
     `;
@@ -49,6 +63,56 @@ router.get('/search', (req, res) => {
     db.all(sql, params, (err, users) => {
         if (err) return res.status(500).send("Error searching users.");
         res.status(200).send(users);
+    });
+});
+
+// Update user profile
+router.put('/profile', upload.single('avatar'), (req, res) => {
+    const { userId, username, bio } = req.body;
+    let avatarUrl = req.file ? req.file.path : null;
+
+    if (!userId) {
+        return res.status(400).send("User ID is required.");
+    }
+
+    // Build dynamic update query
+    let fields = [];
+    let params = [];
+
+    if (username) {
+        fields.push("username = ?");
+        params.push(username);
+    }
+    if (bio !== undefined) {
+        fields.push("bio = ?");
+        params.push(bio);
+    }
+    if (avatarUrl) {
+        fields.push("avatar = ?");
+        params.push(avatarUrl);
+    }
+
+    if (fields.length === 0) {
+        return res.status(400).send("No fields to update.");
+    }
+
+    params.push(userId);
+    const sql = `UPDATE users SET \${fields.join(', ')} WHERE id = ?`;
+
+    db.run(sql, params, function (err) {
+        if (err) {
+            console.error('Error updating profile:', err);
+            if (err.message && err.message.includes('UNIQUE constraint failed: users.username')) {
+                return res.status(400).send("Username already taken.");
+            }
+            return res.status(500).send("Error updating profile.");
+        }
+
+        // Fetch updated user
+        db.get('SELECT id, username, email, avatar, bio, last_seen FROM users WHERE id = ?', [userId], (err, user) => {
+            if (err) return res.status(500).send("Error retrieving updated profile.");
+            res.status(200).send(user);
+        });
     });
 });
 

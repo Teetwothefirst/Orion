@@ -7,6 +7,8 @@ interface User {
     username: string;
     email: string;
     avatar?: string;
+    bio?: string;
+    last_seen?: string;
 }
 
 interface AuthContextType {
@@ -18,6 +20,7 @@ interface AuthContextType {
     isLoading: boolean;
     forgotPassword: (email: string) => Promise<any>;
     resetPassword: (token: string, newPassword: string) => Promise<any>;
+    updateProfile: (username: string, bio: string, avatarFile?: any) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType>({} as AuthContextType);
@@ -85,8 +88,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         router.replace('/login');
     };
 
+    const updateProfile = async (username: string, bio: string, avatarFile?: any) => {
+        const formData = new FormData();
+        formData.append('userId', user?.id.toString() || '');
+        formData.append('username', username);
+        formData.append('bio', bio);
+        if (avatarFile) {
+            formData.append('avatar', avatarFile);
+        }
+
+        try {
+            const response = await api.put('/users/profile', formData, {
+                headers: { 'Content-Type': 'multipart/form-data' }
+            });
+            setUser(response.data);
+        } catch (error) {
+            console.error('Update profile error:', error);
+            throw error;
+        }
+    };
+
     return (
-        <AuthContext.Provider value={{ user, token, signIn, register, signOut, isLoading, forgotPassword, resetPassword }}>
+        <AuthContext.Provider value={{ user, token, signIn, register, signOut, isLoading, forgotPassword, resetPassword, updateProfile }}>
             {children}
         </AuthContext.Provider>
     );

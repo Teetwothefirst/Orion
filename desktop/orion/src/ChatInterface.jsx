@@ -21,8 +21,22 @@ const ChatInterface = () => {
   const [onlineUsers, setOnlineUsers] = useState({}); // { userId: { status, lastSeen } }
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [profileForm, setProfileForm] = useState({ username: '', bio: '', avatar: null });
+  const [availableUsers, setAvailableUsers] = useState([]);
+  const [showNewChatModal, setShowNewChatModal] = useState(false);
+  const [userSearchQuery, setUserSearchQuery] = useState('');
+  const [activeTab, setActiveTab] = useState('chat');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState({ messages: [], chats: [], users: [] });
   const fileInputRef = useRef(null);
   const profileImageRef = useRef(null);
+
+  useEffect(() => {
+    if ("Notification" in window) {
+      if (Notification.permission !== "granted" && Notification.permission !== "denied") {
+        Notification.requestPermission();
+      }
+    }
+  }, []);
 
 
 
@@ -58,6 +72,17 @@ const ChatInterface = () => {
 
         scrollToBottom();
       }
+
+      // Native Desktop Notification
+      if (message.sender_id !== user.id && !document.hasFocus()) {
+        if ("Notification" in window && Notification.permission === "granted") {
+          new Notification(message.username, {
+            body: message.type === 'text' ? message.content : `Sent a \${message.type}`,
+            icon: message.avatar || '👤'
+          });
+        }
+      }
+
       fetchContacts();
     });
 
@@ -102,6 +127,21 @@ const ChatInterface = () => {
       socket.emit('join_room', selectedContact.id);
     }
   }, [selectedContact]);
+
+  const handleGlobalSearch = async (query) => {
+    setSearchQuery(query);
+    if (!query.trim()) {
+      setSearchResults({ messages: [], chats: [], users: [] });
+      return;
+    }
+
+    try {
+      const response = await api.get(`/chats/search?q=${encodeURIComponent(query)}&userId=${user.id}`);
+      setSearchResults(response.data);
+    } catch (error) {
+      console.error('Error searching:', error);
+    }
+  };
 
   const fetchContacts = async () => {
     try {
@@ -333,78 +373,200 @@ const ChatInterface = () => {
           </div>
         </div>
 
-        {/* Connections Header */}
+        {/* Connections Header with Search */}
         <div style={styles.connectionsHeader}>
-          <span style={styles.connectionsTitle}>Connections</span>
-          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-            <Plus
-              size={20}
-              style={{ ...styles.searchIcon, cursor: 'pointer' }}
-              onClick={handleOpenNewChatModal}
-              title="New Chat"
-            />
-            <Search size={16} style={styles.searchIcon} />
-          </div>
-        </div>
-
-        {/* Toggle (Chat / Group) */}
-        <div style={styles.toggleContainer}>
-          <div style={styles.toggleWrapper}>
-            <div
-              style={{
-                ...styles.toggleButton,
-                ...(activeTab === 'chat' ? styles.toggleButtonActive : {})
-              }}
-              onClick={() => setActiveTab('chat')}
-            >
-              Chat
-            </div>
-            <div
-              style={{
-                ...styles.toggleButton,
-                ...(activeTab === 'group' ? styles.toggleButtonActive : {})
-              }}
-              onClick={() => setActiveTab('group')}
-            >
-              Group
-            </div>
-          </div>
-        </div>
-
-        {/* Contacts List */}
-        <div style={styles.contactsList}>
-          {contacts
-            .filter(c => activeTab === 'chat' ? c.type === 'private' : c.type !== 'private')
-            .map((contact, index) => (
-              <div
-                key={index}
+          {searchQuery ? (
+            <div style={{ display: 'flex', alignItems: 'center', width: '100%', gap: '8px' }}>
+              <Search size={16} style={{ color: '#9ca3af' }} />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => handleGlobalSearch(e.target.value)}
+                placeholder="Search messages, users..."
+                autoFocus
                 style={{
-                  ...styles.contactItem,
-                  ...(selectedContact?.id === contact.id ? styles.contactItemSelected : {})
+                  border: 'none',
+                  outline: 'none',
+                  background: 'transparent',
+                  width: '100%',
+                  fontSize: '14px'
                 }}
-                onClick={() => setSelectedContact(contact)}
+              />
+              <X
+                size={16}
+                style={{ cursor: 'pointer', color: '#9ca3af' }}
+                onClick={() => handleGlobalSearch('')}
+              />
+            </div>
+          ) : (
+            <>
+              <span style={styles.connectionsTitle}>Connections</span>
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                <Plus
+                  size={20}
+                  style={{ ...styles.searchIcon, cursor: 'pointer' }}
+                  onClick={handleOpenNewChatModal}
+                  title="New Chat"
+                />
+                <Search
+                  size={16}
+                  style={{ ...styles.searchIcon, cursor: 'pointer' }}
+                  onClick={() => handleGlobalSearch(' ')} // specific trigger to show input
+                />
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* Toggle (Chat / Group) - Hide when searching */}
+        {!searchQuery && (
+          <div style={styles.toggleContainer}>
+            <div style={styles.toggleWrapper}>
+              <div
+                style={{
+                  ...styles.toggleButton,
+                  ...(activeTab === 'chat' ? styles.toggleButtonActive : {})
+                }}
+                onClick={() => setActiveTab('chat')}
               >
-                <div style={styles.avatarContainer}>
-                  <div style={styles.avatar}>
-                    {contact.avatar && contact.avatar.startsWith('http') ? (
-                      <img src={contact.avatar} alt="Avatar" style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} />
-                    ) : (
-                      contact.avatar
+                Chat
+              </div>
+              <div
+                style={{
+                  ...styles.toggleButton,
+                  ...(activeTab === 'group' ? styles.toggleButtonActive : {})
+                }}
+                onClick={() => setActiveTab('group')}
+              >
+                Group
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Contacts List or Search Results */}
+        <div style={styles.contactsList}>
+          {searchQuery ? (
+            <div style={{ padding: '0 16px' }}>
+              {/* Users */}
+              {searchResults.users.length > 0 && (
+                <div style={{ marginBottom: '16px' }}>
+                  <h4 style={{ fontSize: '12px', color: '#6b7280', margin: '12px 0 8px', textTransform: 'uppercase' }}>Users</h4>
+                  {searchResults.users.map(u => (
+                    <div
+                      key={u.id}
+                      style={styles.contactItem}
+                      onClick={() => handleStartChat(u)}
+                    >
+                      <div style={styles.avatar}>{u.avatar || '👤'}</div>
+                      <div style={styles.contactInfo}>
+                        <p style={styles.contactName}>{u.username}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Chats */}
+              {searchResults.chats.length > 0 && (
+                <div style={{ marginBottom: '16px' }}>
+                  <h4 style={{ fontSize: '12px', color: '#6b7280', margin: '12px 0 8px', textTransform: 'uppercase' }}>Chats</h4>
+                  {searchResults.chats.map(c => (
+                    <div
+                      key={c.id}
+                      style={styles.contactItem}
+                      onClick={() => {
+                        // Find if existing contact, else fetch
+                        const contact = contacts.find(existing => existing.id === c.id);
+                        if (contact) {
+                          setSelectedContact(contact);
+                          setSearchQuery('');
+                        } else {
+                          // If not in contacts (unlikely for 'chats' result but possible), reload contacts
+                          fetchContacts().then(() => {
+                            const refreshed = contacts.find(existing => existing.id === c.id);
+                            if (refreshed) setSelectedContact(refreshed);
+                          });
+                        }
+                      }}
+                    >
+                      <div style={styles.avatar}>{c.avatar || (c.type === 'private' ? '👤' : '👥')}</div>
+                      <div style={styles.contactInfo}>
+                        <p style={styles.contactName}>{c.name}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Messages */}
+              {searchResults.messages.length > 0 && (
+                <div>
+                  <h4 style={{ fontSize: '12px', color: '#6b7280', margin: '12px 0 8px', textTransform: 'uppercase' }}>Messages</h4>
+                  {searchResults.messages.map(m => (
+                    <div
+                      key={m.id}
+                      style={styles.contactItem}
+                      onClick={() => {
+                        // Naivigation to message logic could be complex (scroll to message), for now just open chat
+                        const contact = contacts.find(c => c.id === m.chat_id);
+                        if (contact) {
+                          setSelectedContact(contact);
+                          setSearchQuery('');
+                        }
+                      }}
+                    >
+                      <div style={{ ...styles.avatar, width: '32px', height: '32px', fontSize: '14px' }}>{m.avatar || '👤'}</div>
+                      <div style={styles.contactInfo}>
+                        <div style={styles.contactHeader}>
+                          <p style={styles.contactName}>{m.chat_name || m.username}</p>
+                          <span style={styles.contactTime}>{new Date(m.created_at).toLocaleDateString()}</span>
+                        </div>
+                        <p style={styles.contactMessage}>{m.content}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {searchResults.users.length === 0 && searchResults.chats.length === 0 && searchResults.messages.length === 0 && (
+                <div style={{ textAlign: 'center', color: '#9ca3af', padding: '20px' }}>No results found</div>
+              )}
+            </div>
+          ) : (
+            contacts
+              .filter(c => activeTab === 'chat' ? c.type === 'private' : c.type !== 'private')
+              .map((contact, index) => (
+                <div
+                  key={index}
+                  style={{
+                    ...styles.contactItem,
+                    ...(selectedContact?.id === contact.id ? styles.contactItemSelected : {})
+                  }}
+                  onClick={() => setSelectedContact(contact)}
+                >
+                  <div style={styles.avatarContainer}>
+                    <div style={styles.avatar}>
+                      {contact.avatar && contact.avatar.startsWith('http') ? (
+                        <img src={contact.avatar} alt="Avatar" style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} />
+                      ) : (
+                        contact.avatar
+                      )}
+                    </div>
+                    {(onlineUsers[contact.id]?.status === 'online' || contact.online) && (
+                      <div style={styles.onlineIndicator}></div>
                     )}
                   </div>
-                  {(onlineUsers[contact.id]?.status === 'online' || contact.online) && (
-                    <div style={styles.onlineIndicator}></div>
-                  )}
-                </div>
-                <div style={styles.contactInfo}>
-                  <div style={styles.contactHeader}>
-                    <p style={styles.contactName}>{contact.name}</p>
-                    <span style={styles.contactTime}>{contact.time}</span>
+                  <div style={styles.contactInfo}>
+                    <div style={styles.contactHeader}>
+                      <p style={styles.contactName}>{contact.name}</p>
+                      <span style={styles.contactTime}>{contact.time}</span>
+                    </div>
+                    <p style={styles.contactMessage}>{contact.lastMessage}</p>
                   </div>
-                  <p style={styles.contactMessage}>{contact.lastMessage}</p>
                 </div>
-              </div>
-            ))}
+              ))
+          )}
         </div>
 
       </div>

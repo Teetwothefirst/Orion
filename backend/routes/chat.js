@@ -139,4 +139,72 @@ router.get('/:id/messages', (req, res) => {
     });
 });
 
+// Global Search: Messages, existing chats, and potentially new users
+router.get('/search', (req, res) => {
+    const { q, userId } = req.query;
+    if (!q || !userId) {
+        return res.status(400).send("Search query and userId are required.");
+    }
+
+    const searchQuery = `%${q}%`;
+    const results = {
+        messages: [],
+        chats: [],
+        users: []
+    };
+
+    // 1. Search Messages in user's chats
+    const messagesSql = `
+        SELECT m.*, u.username, u.avatar, c.name as chat_name
+        FROM messages m
+        JOIN users u ON m.sender_id = u.id
+        JOIN chats c ON m.chat_id = c.id
+        JOIN chat_participants cp ON m.chat_id = cp.chat_id
+        WHERE cp.user_id = ? AND m.content LIKE ?
+        ORDER BY m.created_at DESC
+        LIMIT 20
+    `;
+
+    // 2. Search Existing Chats/Groups
+    const chatsSql = `
+        SELECT c.*, 
+               CASE 
+                   WHEN c.type = 'private' THEN (
+                       SELECT u.username FROM users u 
+                       JOIN chat_participants cp2 ON u.id = cp2.user_id 
+                       WHERE cp2.chat_id = c.id AND u.id != ?
+                   )
+                   ELSE c.name 
+               END as name
+        FROM chats c
+        JOIN chat_participants cp ON c.id = cp.chat_id
+        WHERE cp.user_id = ? AND name LIKE ?
+        LIMIT 10
+    `;
+
+    // 3. Search Users (excluding current user and existing private chats? - keep it simple for now)
+    const usersSql = `
+        SELECT id, username, email, avatar 
+        FROM users 
+        WHERE id != ? AND (username LIKE ? OR email LIKE ?)
+        LIMIT 10
+    `;
+
+    db.all(messagesSql, [userId, searchQuery], (err, messages) => {
+        if (err) console.error('Search messages error:', err);
+        results.messages = messages || [];
+
+        db.all(chatsSql, [userId, userId, searchQuery], (err, chats) => {
+            if (err) console.error('Search chats error:', err);
+            results.chats = chats || [];
+
+            db.all(usersSql, [userId, searchQuery, searchQuery], (err, users) => {
+                if (err) console.error('Search users error:', err);
+                results.users = users || [];
+                res.status(200).send(results);
+            });
+        });
+    });
+});
+
 module.exports = router;

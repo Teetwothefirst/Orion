@@ -1,4 +1,31 @@
 const db = require('../db');
+const axios = require('axios');
+
+const sendPushNotification = async (userId, title, body, data = {}) => {
+    db.all('SELECT token FROM push_tokens WHERE user_id = ?', [userId], async (err, rows) => {
+        if (err || !rows.length) return;
+
+        const messages = rows.map(row => ({
+            to: row.token,
+            sound: 'default',
+            title: title,
+            body: body,
+            data: data,
+        }));
+
+        try {
+            await axios.post('https://exp.host/--/api/v2/push/send', messages, {
+                headers: {
+                    'Accept': 'application/json',
+                    'Accept-encoding': 'gzip, deflate',
+                    'Content-Type': 'application/json',
+                },
+            });
+        } catch (error) {
+            console.error('Error sending push notification:', error.message);
+        }
+    });
+};
 
 module.exports = (io, socket) => {
     console.log('User connected:', socket.id);
@@ -7,12 +34,8 @@ module.exports = (io, socket) => {
         socket.userId = userId;
         console.log(`User ${userId} is online`);
 
-        // Broadcast online status to all rooms the user is in? 
-        // Simple approach: Broadcast to everyone or let clients handle status checks.
-        // Better: Broadcast to all connected sockets that this user is online.
         io.emit('user_status', { userId, status: 'online' });
 
-        // Update last_seen to now (running)
         db.run(`UPDATE users SET last_seen = CURRENT_TIMESTAMP WHERE id = ?`, [userId]);
     });
 
@@ -54,6 +77,16 @@ module.exports = (io, socket) => {
 
                     // Broadcast to room
                     io.to(chatId).emit('receive_message', messageData);
+
+                    // Send push notification to other participants
+                    db.all('SELECT user_id FROM chat_participants WHERE chat_id = ? AND user_id != ?', [chatId, senderId], (err, participants) => {
+                        if (!err && participants) {
+                            participants.forEach(p => {
+                                const notificationBody = msgType === 'text' ? content : `Sent a ${msgType}`;
+                                sendPushNotification(p.user_id, messageData.username, notificationBody, { chatId });
+                            });
+                        }
+                    });
                 });
             }
         );

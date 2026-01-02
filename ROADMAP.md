@@ -4,21 +4,21 @@ This roadmap outlines the journey from a basic real-time chat to a production-re
 
 ## Phase 1: Production Infrastructure & Stability
 *Priority: Critical*
-- [ ] **Cloud Deployment**: Move backend to a VPS (Render, Railway, or VPS) with PostgreSQL/MySQL. <!-- id: 27 -->
-- [ ] **HTTPS/SSL**: Secure API and Socket connections. <!-- id: 28 -->
-- [ ] **Environment Security**: Secret management and CORS hardening. <!-- id: 29 -->
+- [x] **Cloud Deployment**: Move backend to a VPS (Render, Railway, or VPS) with PostgreSQL/MySQL. <!-- id: 27 -->
+- [x] **HTTPS/SSL**: Secure API and Socket connections. <!-- id: 28 -->
+- [x] **Environment Security**: Secret management and CORS hardening. <!-- id: 29 -->
 
 ## Phase 2: Core Messaging Enhancements
 *Priority: High*
-- [ ] **Media Sharing**: Image, Video, and Document uploads (AWS S3 or Cloudinary). <!-- id: 30 -->
-- [ ] **Message Status**: Delivered (single tick) and Read (double tick) receipts. <!-- id: 31 -->
-- [ ] **Reply & Forward**: Contextual threaded replies and message forwarding. <!-- id: 32 -->
+- [x] **Media Sharing**: Image, Video, and Document uploads (AWS S3 or Cloudinary). <!-- id: 30 -->
+- [x] **Message Status**: Delivered (single tick) and Read (double tick) receipts. <!-- id: 31 -->
+- [x] **Reply & Forward**: Contextual threaded replies and message forwarding. <!-- id: 32 -->
 
 ## Phase 3: Identity & Engagement
 *Priority: Medium-High*
-- [ ] **Push Notifications**: Real-time alerts when app is in background (FCM/Expo Push). <!-- id: 33 -->
-- [ ] **User Profiles**: Real avatar uploads, Bio, and "Online/Last Seen" status. <!-- id: 34 -->
-- [ ] **Global Search**: Search through messages, users, and groups. <!-- id: 35 -->
+- [x] **Push Notifications**: Real-time alerts when app is in background (FCM/Expo Push). <!-- id: 33 -->
+- [x] **User Profiles**: Real avatar uploads, Bio, and "Online/Last Seen" status. <!-- id: 34 -->
+- [x] **Global Search**: Search through messages, users, and groups. <!-- id: 35 -->
 
 ## Phase 4: Scaling & Discovery
 *Priority: Medium*

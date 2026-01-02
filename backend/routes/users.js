@@ -116,4 +116,39 @@ router.put('/profile', upload.single('avatar'), (req, res) => {
     });
 });
 
+// Register or update push token
+router.post('/push-token', (req, res) => {
+    const { userId, token, platform } = req.body;
+
+    if (!userId || !token) {
+        return res.status(400).send("User ID and token are required.");
+    }
+
+    // Use INSERT OR REPLACE (SQLite) or ON CONFLICT (Postgres) logic
+    // For simplicity, let's use a standard query that works with our db wrapper
+    const sql = `
+        INSERT INTO push_tokens (user_id, token, platform) 
+        VALUES (?, ?, ?)
+    `;
+
+    // Check if token already exists to avoid unique constraint failure
+    db.get('SELECT id FROM push_tokens WHERE token = ?', [token], (err, existing) => {
+        if (existing) {
+            // Update user_id if token exists but belongs to someone else (or just confirm)
+            db.run('UPDATE push_tokens SET user_id = ?, platform = ? WHERE token = ?', [userId, platform, token], (err) => {
+                if (err) return res.status(500).send("Error updating push token.");
+                res.status(200).send({ message: "Push token updated." });
+            });
+        } else {
+            db.run(sql, [userId, token, platform], function (err) {
+                if (err) {
+                    console.error('Error saving push token:', err);
+                    return res.status(500).send("Error saving push token.");
+                }
+                res.status(201).send({ message: "Push token registered.", id: this.lastID });
+            });
+        }
+    });
+});
+
 module.exports = router;

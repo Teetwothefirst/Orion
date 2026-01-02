@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, FlatList, TouchableOpacity, Image, SafeAreaView
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/context/AuthContext';
-import { api } from '@/services/api';
+import { api, socket } from '@/services/api';
 import NewChatModal from './NewChatModal';
 
 const { width } = Dimensions.get('window');
@@ -121,9 +121,14 @@ export default function ChatListScreen() {
                     />
                 </TouchableOpacity>
                 <Text style={styles.headerTitle}>Orion</Text>
-                <TouchableOpacity onPress={() => setShowNewChatModal(true)}>
-                    <Ionicons name="add" size={28} color="#007AFF" />
-                </TouchableOpacity>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 15 }}>
+                    <TouchableOpacity onPress={() => router.push('/search')}>
+                        <Ionicons name="search" size={24} color="#007AFF" />
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={() => setShowNewChatModal(true)}>
+                        <Ionicons name="add" size={28} color="#007AFF" />
+                    </TouchableOpacity>
+                </View>
             </View>
 
             {/* Chat List */}

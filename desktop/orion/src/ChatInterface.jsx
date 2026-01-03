@@ -27,6 +27,12 @@ const ChatInterface = () => {
   const [activeTab, setActiveTab] = useState('chat');
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState({ messages: [], chats: [], users: [] });
+  const [showGroupInfo, setShowGroupInfo] = useState(false);
+  const [participants, setParticipants] = useState([]);
+  const [myRole, setMyRole] = useState('member');
+  const [showJoinModal, setShowJoinModal] = useState(false);
+  const [inviteCode, setInviteCode] = useState('');
+  const [isChannel, setIsChannel] = useState(false);
   const fileInputRef = useRef(null);
   const profileImageRef = useRef(null);
 
@@ -77,7 +83,7 @@ const ChatInterface = () => {
       if (message.sender_id !== user.id && !document.hasFocus()) {
         if ("Notification" in window && Notification.permission === "granted") {
           new Notification(message.username, {
-            body: message.type === 'text' ? message.content : `Sent a \${message.type}`,
+            body: message.type === 'text' ? message.content : `Sent a ${message.type}`,
             icon: message.avatar || '👤'
           });
         }
@@ -140,6 +146,53 @@ const ChatInterface = () => {
       setSearchResults(response.data);
     } catch (error) {
       console.error('Error searching:', error);
+    }
+  };
+
+  const fetchParticipants = async (chatId) => {
+    try {
+      const response = await api.get(`/chats/${chatId}/participants`);
+      setParticipants(response.data);
+      const me = response.data.find(p => p.id === user.id);
+      if (me) setMyRole(me.role);
+    } catch (error) {
+      console.error('Error fetching participants:', error);
+    }
+  };
+
+  const handleRemoveParticipant = async (targetUserId) => {
+    if (!window.confirm('Are you sure you want to remove this participant?')) return;
+    try {
+      await api.delete(`/chats/${selectedContact.id}/participants/${targetUserId}?adminId=${user.id}`);
+      fetchParticipants(selectedContact.id);
+    } catch (error) {
+      alert(error.response?.data || 'Error removing participant');
+    }
+  };
+
+  const handleUpdateRole = async (targetUserId, newRole) => {
+    try {
+      await api.post(`/chats/${selectedContact.id}/role`, {
+        adminId: user.id,
+        targetUserId,
+        role: newRole
+      });
+      fetchParticipants(selectedContact.id);
+    } catch (error) {
+      alert(error.response?.data || 'Error updating role');
+    }
+  };
+
+  const handleJoinGroup = async () => {
+    if (!inviteCode) return;
+    try {
+      const response = await api.post(`/chats/join/${inviteCode}`, { userId: user.id });
+      alert(response.data.message);
+      setShowJoinModal(false);
+      setInviteCode('');
+      fetchContacts();
+    } catch (error) {
+      alert(error.response?.data || 'Error joining group');
     }
   };
 
@@ -224,7 +277,7 @@ const ChatInterface = () => {
       });
 
       handleSendMessage({
-        content: `Sent a \${response.data.type}`,
+        content: `Sent a ${response.data.type}`,
         type: response.data.type,
         media_url: response.data.url
       });
@@ -402,6 +455,12 @@ const ChatInterface = () => {
             <>
               <span style={styles.connectionsTitle}>Connections</span>
               <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                <Users
+                  size={18}
+                  style={{ ...styles.searchIcon, cursor: 'pointer' }}
+                  onClick={() => setShowJoinModal(true)}
+                  title="Join Group by Code"
+                />
                 <Plus
                   size={20}
                   style={{ ...styles.searchIcon, cursor: 'pointer' }}
@@ -612,15 +671,27 @@ const ChatInterface = () => {
                     '👤'
                   )}
                 </div>
-                <div>
+                <div
+                  style={{ cursor: selectedContact.type !== 'private' ? 'pointer' : 'default' }}
+                  onClick={() => {
+                    if (selectedContact.type !== 'private') {
+                      fetchParticipants(selectedContact.id);
+                      setShowGroupInfo(true);
+                    }
+                  }}
+                >
                   <h3 style={styles.chatName}>{selectedContact.name}</h3>
                   <p style={styles.chatStatus}>
-                    {onlineUsers[selectedContact.id]?.status === 'online' ? (
-                      <span style={{ color: '#10b981' }}>Online</span>
-                    ) : onlineUsers[selectedContact.id]?.lastSeen || selectedContact.lastSeen ? (
-                      `Last seen \${new Date(onlineUsers[selectedContact.id]?.lastSeen || selectedContact.lastSeen).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+                    {selectedContact.type === 'private' ? (
+                      onlineUsers[selectedContact.id]?.status === 'online' ? (
+                        <span style={{ color: '#10b981' }}>Online</span>
+                      ) : onlineUsers[selectedContact.id]?.lastSeen || selectedContact.lastSeen ? (
+                        `Last seen \${new Date(onlineUsers[selectedContact.id]?.lastSeen || selectedContact.lastSeen).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+                      ) : (
+                        'Last seen recently'
+                      )
                     ) : (
-                      'Last seen recently'
+                      'Group Info'
                     )}
                   </p>
                 </div>
@@ -787,34 +858,41 @@ const ChatInterface = () => {
               {/* Group Creation UI */}
               {activeTab === 'group' && (
                 <div style={{ padding: '0 16px 16px 16px', display: 'flex', gap: '8px' }}>
-                  <input
-                    type="text"
-                    placeholder="Group Name"
-                    style={{ ...styles.searchInput, flex: 1 }}
-                    id="groupNameInput"
-                  />
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', flex: 1 }}>
+                    <input
+                      type="text"
+                      placeholder="Group/Channel Name"
+                      style={{ ...styles.searchInput, marginBottom: 0 }}
+                      id="groupNameInput"
+                    />
+                    <label style={{ fontSize: '12px', display: 'flex', alignItems: 'center', gap: '8px', color: '#6b7280' }}>
+                      <input
+                        type="checkbox"
+                        checked={isChannel}
+                        onChange={(e) => setIsChannel(e.target.checked)}
+                      />
+                      Create as Read-only Channel
+                    </label>
+                  </div>
                   <button
-                    style={{ ...styles.sendButton, borderRadius: '8px', width: 'auto', padding: '0 16px' }}
+                    style={{ ...styles.sendButton, borderRadius: '8px', width: 'auto', padding: '0 16px', height: '46px' }}
                     onClick={() => {
                       const name = document.getElementById('groupNameInput').value;
                       const selectedCheckboxes = document.querySelectorAll('input[name="userSelect"]:checked');
                       const selectedIds = Array.from(selectedCheckboxes).map(cb => cb.value);
 
-                      if (!name) return alert('Please enter a group name');
-                      if (selectedIds.length === 0) return alert('Please select at least one member');
+                      if (!name) return alert('Please enter a name');
 
-                      // Call API to create group
-                      // For now, reusing handleStartChat logic but adapted
                       api.post('/chats', {
                         userId: user.id,
-                        type: 'group',
+                        type: isChannel ? 'channel' : 'group',
                         name: name,
                         participantIds: selectedIds
                       }).then(async (response) => {
                         setShowNewChatModal(false);
+                        setIsChannel(false);
                         await fetchContacts();
-                        // Select the new chat
-                        // Logic similar to handleStartChat
+
                         const chatResponse = await api.get(`/chats?userId=${user.id}`);
                         const chat = chatResponse.data.find(c => c.id === response.data.id);
                         if (chat) {
@@ -894,102 +972,214 @@ const ChatInterface = () => {
       {showBugReport && <BugReportModal onClose={() => setShowBugReport(false)} />}
 
       {/* Profile Modal */}
-      {showProfileModal && (
-        <div style={styles.modalOverlay} onClick={() => setShowProfileModal(false)}>
-          <div style={styles.modalContent} onClick={(e) => e.stopPropagation()}>
-            <div style={styles.modalHeader}>
-              <h2 style={styles.modalTitle}>Edit Profile</h2>
-              <X size={24} style={{ cursor: 'pointer', color: '#6b7280' }} onClick={() => setShowProfileModal(false)} />
-            </div>
-            <form onSubmit={handleUpdateProfile} style={{ padding: '16px' }}>
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: '20px' }}>
-                <div
-                  style={{ ...styles.userAvatar, width: '80px', height: '80px', fontSize: '32px', cursor: 'pointer', marginBottom: '10px' }}
-                  onClick={() => profileImageRef.current.click()}
-                >
-                  {profileForm.avatar ? (
-                    <img src={profileForm.avatar} alt="Avatar" style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} />
-                  ) : '👤'}
+      {
+        showProfileModal && (
+          <div style={styles.modalOverlay} onClick={() => setShowProfileModal(false)}>
+            <div style={styles.modalContent} onClick={(e) => e.stopPropagation()}>
+              <div style={styles.modalHeader}>
+                <h2 style={styles.modalTitle}>Edit Profile</h2>
+                <X size={24} style={{ cursor: 'pointer', color: '#6b7280' }} onClick={() => setShowProfileModal(false)} />
+              </div>
+              <form onSubmit={handleUpdateProfile} style={{ padding: '16px' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: '20px' }}>
+                  <div
+                    style={{ ...styles.userAvatar, width: '80px', height: '80px', fontSize: '32px', cursor: 'pointer', marginBottom: '10px' }}
+                    onClick={() => profileImageRef.current.click()}
+                  >
+                    {profileForm.avatar ? (
+                      <img src={profileForm.avatar} alt="Avatar" style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} />
+                    ) : '👤'}
+                  </div>
+                  <input
+                    type="file"
+                    ref={profileImageRef}
+                    hidden
+                    accept="image/*"
+                    onChange={(e) => {
+                      const file = e.target.files[0];
+                      if (file) {
+                        setProfileForm({ ...profileForm, avatar: URL.createObjectURL(file), avatarFile: file });
+                      }
+                    }}
+                  />
+                  <span style={{ fontSize: '12px', color: '#6b7280' }}>Click to change avatar</span>
                 </div>
-                <input
-                  type="file"
-                  ref={profileImageRef}
-                  hidden
-                  accept="image/*"
-                  onChange={(e) => {
-                    const file = e.target.files[0];
-                    if (file) {
-                      setProfileForm({ ...profileForm, avatar: URL.createObjectURL(file), avatarFile: file });
-                    }
-                  }}
-                />
-                <span style={{ fontSize: '12px', color: '#6b7280' }}>Click to change avatar</span>
-              </div>
-              <div style={{ marginBottom: '15px' }}>
-                <label style={{ display: 'block', fontSize: '14px', marginBottom: '5px', color: '#374151' }}>Username</label>
-                <input
-                  type="text"
-                  value={profileForm.username}
-                  onChange={(e) => setProfileForm({ ...profileForm, username: e.target.value })}
-                  style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #d1d5db' }}
-                />
-              </div>
-              <div style={{ marginBottom: '20px' }}>
-                <label style={{ display: 'block', fontSize: '14px', marginBottom: '5px', color: '#374151' }}>Bio</label>
-                <textarea
-                  value={profileForm.bio}
-                  onChange={(e) => setProfileForm({ ...profileForm, bio: e.target.value })}
-                  placeholder="Tell us about yourself..."
-                  style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #d1d5db', height: '80px', resize: 'none' }}
-                />
-              </div>
-              <button
-                type="submit"
-                style={{ width: '100%', padding: '10px', backgroundColor: '#000', color: 'white', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' }}
-              >
-                Save Changes
-              </button>
-            </form>
+                <div style={{ marginBottom: '15px' }}>
+                  <label style={{ display: 'block', fontSize: '14px', marginBottom: '5px', color: '#374151' }}>Username</label>
+                  <input
+                    type="text"
+                    value={profileForm.username}
+                    onChange={(e) => setProfileForm({ ...profileForm, username: e.target.value })}
+                    style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #d1d5db' }}
+                  />
+                </div>
+                <div style={{ marginBottom: '20px' }}>
+                  <label style={{ display: 'block', fontSize: '14px', marginBottom: '5px', color: '#374151' }}>Bio</label>
+                  <textarea
+                    value={profileForm.bio}
+                    onChange={(e) => setProfileForm({ ...profileForm, bio: e.target.value })}
+                    placeholder="Tell us about yourself..."
+                    style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #d1d5db', height: '80px', resize: 'none' }}
+                  />
+                </div>
+                <button
+                  type="submit"
+                  style={{ width: '100%', padding: '10px', backgroundColor: '#000', color: 'white', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' }}
+                >
+                  Save Changes
+                </button>
+              </form>
+            </div>
           </div>
-        </div>
-      )}
+        )
+      }
 
       {/* Forward Selection Modal */}
-      {showForwardModal && (
-        <div style={styles.modalOverlay} onClick={() => setShowForwardModal(false)}>
-          <div style={styles.modalContent} onClick={(e) => e.stopPropagation()}>
-            <div style={styles.modalHeader}>
-              <h2 style={styles.modalTitle}>Forward Message</h2>
-              <X
-                size={24}
-                style={{ cursor: 'pointer', color: '#6b7280' }}
-                onClick={() => setShowForwardModal(false)}
-              />
-            </div>
+      {
+        showForwardModal && (
+          <div style={styles.modalOverlay} onClick={() => setShowForwardModal(false)}>
+            <div style={styles.modalContent} onClick={(e) => e.stopPropagation()}>
+              <div style={styles.modalHeader}>
+                <h2 style={styles.modalTitle}>Forward Message</h2>
+                <X
+                  size={24}
+                  style={{ cursor: 'pointer', color: '#6b7280' }}
+                  onClick={() => setShowForwardModal(false)}
+                />
+              </div>
 
-            <div style={{ padding: '0 16px 16px 16px', color: '#6b7280', fontSize: '14px' }}>
-              Select a contact to forward this message to.
-            </div>
+              <div style={{ padding: '0 16px 16px 16px', color: '#6b7280', fontSize: '14px' }}>
+                Select a contact to forward this message to.
+              </div>
 
-            <div style={styles.userList}>
-              {contacts.map((contact) => (
-                <div
-                  key={contact.id}
-                  style={styles.userItem}
-                  onClick={() => confirmForward(contact.id)}
-                >
-                  <div style={styles.userItemAvatar}>{contact.avatar || '👤'}</div>
-                  <div style={styles.userItemInfo}>
-                    <p style={styles.userItemName}>{contact.name}</p>
-                    <p style={styles.userItemEmail}>{contact.lastMessage}</p>
+              <div style={styles.userList}>
+                {contacts.map((contact) => (
+                  <div
+                    key={contact.id}
+                    style={styles.userItem}
+                    onClick={() => confirmForward(contact.id)}
+                  >
+                    <div style={styles.userItemAvatar}>{contact.avatar || '👤'}</div>
+                    <div style={styles.userItemInfo}>
+                      <p style={styles.userItemName}>{contact.name}</p>
+                      <p style={styles.userItemEmail}>{contact.lastMessage}</p>
+                    </div>
                   </div>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
           </div>
-        </div>
-      )}
-    </div>
+        )
+      }
+
+      {/* Group Info Modal */}
+      {
+        showGroupInfo && (
+          <div style={styles.modalOverlay} onClick={() => setShowGroupInfo(false)}>
+            <div style={{ ...styles.modalContent, width: '400px' }} onClick={(e) => e.stopPropagation()}>
+              <div style={styles.modalHeader}>
+                <h2 style={styles.modalTitle}>Group Info</h2>
+                <X size={24} style={{ cursor: 'pointer', color: '#6b7280' }} onClick={() => setShowGroupInfo(false)} />
+              </div>
+
+              <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', alignItems: 'center', borderBottom: '1px solid #f3f4f6' }}>
+                <div style={{ ...styles.chatAvatar, width: '80px', height: '80px', fontSize: '32px', marginBottom: '16px' }}>
+                  {selectedContact.avatar || '👥'}
+                </div>
+                <h3 style={{ margin: '0 0 8px 0', fontSize: '20px' }}>{selectedContact.name}</h3>
+                {selectedContact.invite_code && (
+                  <div style={{ backgroundColor: '#f3f4f6', padding: '8px 12px', borderRadius: '8px', display: 'flex', gap: '8px', alignItems: 'center', marginTop: '8px' }}>
+                    <code style={{ fontSize: '12px' }}>{selectedContact.invite_code}</code>
+                    <button
+                      style={{ border: 'none', background: 'none', color: '#3b82f6', fontSize: '12px', cursor: 'pointer', fontWeight: 'bold' }}
+                      onClick={() => {
+                        navigator.clipboard.writeText(selectedContact.invite_code);
+                        alert('Invite code copied!');
+                      }}
+                    >
+                      Copy
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              <div style={{ padding: '16px' }}>
+                <h4 style={{ fontSize: '14px', color: '#6b7280', marginBottom: '12px', textTransform: 'uppercase' }}>
+                  Participants ({participants.length})
+                </h4>
+                <div style={{ ...styles.userList, maxHeight: '300px' }}>
+                  {participants.map(p => (
+                    <div key={p.id} style={{ ...styles.userItem, cursor: 'default' }}>
+                      <div style={styles.userItemAvatar}>{p.avatar || '👤'}</div>
+                      <div style={styles.userItemInfo}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <p style={styles.userItemName}>{p.username} {p.id === user.id && '(You)'}</p>
+                          <span style={{ fontSize: '11px', color: '#3b82f6', fontWeight: 'bold', textTransform: 'uppercase', backgroundColor: '#eff6ff', padding: '2px 6px', borderRadius: '4px' }}>
+                            {p.role}
+                          </span>
+                        </div>
+                        {(myRole === 'owner' || myRole === 'admin') && p.id !== user.id && (
+                          <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
+                            {myRole === 'owner' && (
+                              <button
+                                style={{ fontSize: '11px', border: 'none', background: '#f3f4f6', padding: '2px 8px', borderRadius: '4px', cursor: 'pointer' }}
+                                onClick={() => handleUpdateRole(p.id, p.role === 'admin' ? 'member' : 'admin')}
+                              >
+                                {p.role === 'admin' ? 'Demote' : 'Promote'}
+                              </button>
+                            )}
+                            <button
+                              style={{ fontSize: '11px', border: 'none', background: '#fee2e2', color: '#ef4444', padding: '2px 8px', borderRadius: '4px', cursor: 'pointer' }}
+                              onClick={() => handleRemoveParticipant(p.id)}
+                              disabled={p.role === 'owner' || (myRole === 'admin' && p.role === 'admin')}
+                            >
+                              Remove
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        )
+      }
+
+      {/* Join Group Modal */}
+      {
+        showJoinModal && (
+          <div style={styles.modalOverlay} onClick={() => setShowJoinModal(false)}>
+            <div style={{ ...styles.modalContent, width: '400px' }} onClick={(e) => e.stopPropagation()}>
+              <div style={styles.modalHeader}>
+                <h2 style={styles.modalTitle}>Join Group</h2>
+                <X size={24} style={{ cursor: 'pointer', color: '#6b7280' }} onClick={() => setShowJoinModal(false)} />
+              </div>
+              <div style={{ padding: '20px' }}>
+                <p style={{ fontSize: '14px', color: '#6b7280', marginBottom: '16px' }}>
+                  Enter the group invite code to join a community.
+                </p>
+                <input
+                  type="text"
+                  placeholder="Invite Code (e.g. 5f2a...)"
+                  value={inviteCode}
+                  onChange={(e) => setInviteCode(e.target.value)}
+                  style={styles.searchInput}
+                  autoFocus
+                />
+                <button
+                  style={{ ...styles.sendButton, width: '100%', borderRadius: '12px', padding: '12px' }}
+                  onClick={handleJoinGroup}
+                >
+                  Join Community
+                </button>
+              </div>
+            </div>
+          </div>
+        )
+      }
+    </div >
   );
 };
 
@@ -1706,6 +1896,35 @@ const styles = {
     background: 'linear-gradient(45deg, #667eea, #764ba2)',
     color: 'white',
     transition: 'transform 0.2s'
+  },
+  modalOverlay: {
+    position: 'fixed',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 1000
+  },
+  modalContent: {
+    backgroundColor: 'white',
+    borderRadius: '24px',
+    width: '500px',
+    maxHeight: '90vh',
+    display: 'flex',
+    flexDirection: 'column',
+    overflow: 'hidden',
+    boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)'
+  },
+  modalHeader: {
+    padding: '24px',
+    borderBottom: '1px solid #f3f4f6',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between'
   }
 };
 

@@ -46,50 +46,68 @@ module.exports = (io, socket) => {
 
     socket.on('send_message', (data) => {
         const { chatId, senderId, content, type, media_url, reply_to_id, forwarded_from_id } = data;
-        const msgType = type || 'text';
-        const msgStatus = 'sent';
 
-        // Save to database
-        db.run(`INSERT INTO messages (chat_id, sender_id, content, type, media_url, status, reply_to_id, forwarded_from_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-            [chatId, senderId, content, msgType, media_url, msgStatus, reply_to_id, forwarded_from_id],
-            function (err) {
-                if (err) {
-                    console.error(err.message);
-                    return;
-                }
-
-                // Fetch sender info to send back with message
-                db.get(`SELECT username, avatar FROM users WHERE id = ?`, [senderId], (err, user) => {
-                    const messageData = {
-                        id: this.lastID,
-                        chat_id: chatId,
-                        sender_id: senderId,
-                        content: content,
-                        type: msgType,
-                        media_url: media_url,
-                        status: msgStatus,
-                        reply_to_id: reply_to_id,
-                        forwarded_from_id: forwarded_from_id,
-                        created_at: new Date().toISOString(),
-                        username: user ? user.username : 'Unknown',
-                        avatar: user ? user.avatar : null
-                    };
-
-                    // Broadcast to room
-                    io.to(chatId).emit('receive_message', messageData);
-
-                    // Send push notification to other participants
-                    db.all('SELECT user_id FROM chat_participants WHERE chat_id = ? AND user_id != ?', [chatId, senderId], (err, participants) => {
-                        if (!err && participants) {
-                            participants.forEach(p => {
-                                const notificationBody = msgType === 'text' ? content : `Sent a ${msgType}`;
-                                sendPushNotification(p.user_id, messageData.username, notificationBody, { chatId });
-                            });
-                        }
-                    });
+        // Permission check for Channels
+        db.get('SELECT type FROM chats WHERE id = ?', [chatId], (err, chat) => {
+            if (!err && chat && chat.type === 'channel') {
+                db.get('SELECT role FROM chat_participants WHERE chat_id = ? AND user_id = ?', [chatId, senderId], (err, participant) => {
+                    if (err || !participant || (participant.role !== 'admin' && participant.role !== 'owner')) {
+                        console.log(`User ${senderId} tried to post in channel ${chatId} without permission.`);
+                        return; // Silently fail or emit error
+                    }
+                    saveAndBroadcast();
                 });
+            } else {
+                saveAndBroadcast();
             }
-        );
+        });
+
+        function saveAndBroadcast() {
+            const msgType = type || 'text';
+            const msgStatus = 'sent';
+
+            // Save to database
+            db.run(`INSERT INTO messages (chat_id, sender_id, content, type, media_url, status, reply_to_id, forwarded_from_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+                [chatId, senderId, content, msgType, media_url, msgStatus, reply_to_id, forwarded_from_id],
+                function (err) {
+                    if (err) {
+                        console.error(err.message);
+                        return;
+                    }
+
+                    const lastID = this.lastID;
+                    // Fetch message with details (username, avatar, reply context)
+                    const fetchSql = `
+                        SELECT m.*, u.username, u.avatar,
+                               r.content as reply_content, r.sender_id as reply_sender_id
+                        FROM messages m
+                        JOIN users u ON m.sender_id = u.id
+                        LEFT JOIN messages r ON m.reply_to_id = r.id
+                        WHERE m.id = ?
+                    `;
+
+                    db.get(fetchSql, [lastID], (err, messageData) => {
+                        if (err || !messageData) {
+                            console.error('Error fetching broadcast data:', err);
+                            return;
+                        }
+
+                        // Broadcast to room
+                        io.to(chatId).emit('receive_message', messageData);
+
+                        // Send push notification to other participants
+                        db.all('SELECT user_id FROM chat_participants WHERE chat_id = ? AND user_id != ?', [chatId, senderId], (err, participants) => {
+                            if (!err && participants) {
+                                participants.forEach(p => {
+                                    const notificationBody = msgType === 'text' ? content : `Sent a ${msgType}`;
+                                    sendPushNotification(p.user_id, messageData.username, notificationBody, { chatId });
+                                });
+                            }
+                        });
+                    });
+                }
+            );
+        }
     });
 
     socket.on('message_delivered', (data) => {

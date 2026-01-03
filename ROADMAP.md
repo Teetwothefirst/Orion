@@ -22,9 +22,9 @@ This roadmap outlines the journey from a basic real-time chat to a production-re
 
 ## Phase 4: Scaling & Discovery
 *Priority: Medium*
-- [ ] **Public Channels**: Broadcast-only channels for unlimited subscribers. <!-- id: 36 -->
-- [ ] **Invite Links**: QR codes and shareable links for groups/channels. <!-- id: 37 -->
-- [ ] **Admin Tools**: Group permissions, banning users, and promoting admins. <!-- id: 38 -->
+- [x] **Public Channels**: Broadcast-only channels for unlimited subscribers. <!-- id: 36 -->
+- [x] **Invite Links**: QR codes and shareable links for groups/channels. <!-- id: 37 -->
+- [x] **Admin Tools**: Group permissions, banning users, and promoting admins. <!-- id: 38 -->
 
 ## Phase 5: Security & Optimization
 *Priority: Low (Complexity: High)*

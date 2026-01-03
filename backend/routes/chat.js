@@ -3,8 +3,11 @@ const db = require('../db');
 const multer = require('multer');
 const cloudinary = require('../utils/cloudinary');
 const { CloudinaryStorage } = require('multer-storage-cloudinary');
+const crypto = require('crypto');
 
 const router = express.Router();
+
+const generateInviteCode = () => crypto.randomBytes(6).toString('hex');
 
 // Multer & Cloudinary Storage Configuration
 const storage = new CloudinaryStorage({
@@ -36,7 +39,7 @@ router.get('/', (req, res) => {
     const userId = req.query.userId;
 
     const sql = `
-        SELECT c.id, c.type, c.name as group_name, c.updated_at,
+        SELECT c.id, c.type, c.name as group_name, c.updated_at, c.invite_code,
                CASE 
                    WHEN c.type = 'private' THEN (
                        SELECT u.id 
@@ -94,28 +97,38 @@ router.post('/', (req, res) => {
             if (chat) {
                 return res.status(200).send(chat);
             }
-            createChat(chatType, 'Private Chat', [userId, otherUserId]);
+            createChat(chatType, 'Private Chat', [userId, otherUserId], userId);
         });
     } else {
         // Group Chat
         // Always create a new group chat
-        createChat(chatType, name || 'New Group', [userId, ...participantIds]);
+        createChat(chatType, name || 'New Group', [userId, ...participantIds], userId);
     }
 
-    function createChat(type, name, participants) {
-        db.run(`INSERT INTO chats (name, type) VALUES (?, ?)`, [name, type], function (err) {
-            if (err) return res.status(500).send("Error creating chat.");
-            const chatId = this.lastID;
+    function createChat(type, name, participants, creatorId) {
+        const inviteCode = type !== 'private' ? generateInviteCode() : null;
+        db.run(`INSERT INTO chats (name, type, creator_id, invite_code) VALUES (?, ?, ?, ?)`,
+            [name, type, creatorId, inviteCode], function (err) {
+                if (err) return res.status(500).send("Error creating chat.");
+                const chatId = this.lastID;
 
-            // Add participants
-            const placeholders = participants.map(() => '(?, ?)').join(',');
-            const values = participants.flatMap(uid => [chatId, uid]);
+                // Add owner
+                db.run(`INSERT INTO chat_participants (chat_id, user_id, role) VALUES (?, ?, 'owner')`, [chatId, creatorId], (err) => {
+                    if (err) return res.status(500).send("Error adding owner.");
 
-            db.run(`INSERT INTO chat_participants (chat_id, user_id) VALUES ${placeholders}`, values, (err) => {
-                if (err) return res.status(500).send("Error adding participants.");
-                res.status(200).send({ id: chatId, name: name, type: type });
+                    const memberIds = participants.filter(id => id !== creatorId);
+                    if (memberIds.length > 0) {
+                        const placeholders = memberIds.map(() => '(?, ?, \'member\')').join(',');
+                        const values = memberIds.flatMap(uid => [chatId, uid]);
+                        db.run(`INSERT INTO chat_participants (chat_id, user_id, role) VALUES ${placeholders}`, values, (err) => {
+                            if (err) return res.status(500).send("Error adding members.");
+                            res.status(200).send({ id: chatId, name: name, type: type, invite_code: inviteCode });
+                        });
+                    } else {
+                        res.status(200).send({ id: chatId, name: name, type: type, invite_code: inviteCode });
+                    }
+                });
             });
-        });
     }
 });
 
@@ -204,6 +217,94 @@ router.get('/search', (req, res) => {
                 res.status(200).send(results);
             });
         });
+    });
+});
+
+// Get chat info by invite code
+router.get('/invite/:code', (req, res) => {
+    const code = req.params.code;
+    const sql = `SELECT id, name, type, avatar FROM chats WHERE invite_code = ?`;
+    db.get(sql, [code], (err, chat) => {
+        if (err || !chat) return res.status(404).send("Invite code not found.");
+        res.status(200).send(chat);
+    });
+});
+
+// Join chat by invite code
+router.post('/join/:code', (req, res) => {
+    const code = req.params.code;
+    const { userId } = req.body;
+
+    db.get(`SELECT id FROM chats WHERE invite_code = ?`, [code], (err, chat) => {
+        if (err || !chat) return res.status(404).send("Invalid invite code.");
+
+        // Check if already a participant
+        db.get(`SELECT * FROM chat_participants WHERE chat_id = ? AND user_id = ?`, [chat.id, userId], (err, participant) => {
+            if (participant) return res.status(200).send({ message: "Already a participant", chatId: chat.id });
+
+            db.run(`INSERT INTO chat_participants (chat_id, user_id, role) VALUES (?, ?, 'member')`, [chat.id, userId], (err) => {
+                if (err) return res.status(500).send("Error joining group.");
+                res.status(200).send({ message: "Successfully joined group", chatId: chat.id });
+            });
+        });
+    });
+});
+
+// Update participant role (Admin/Owner only)
+router.post('/:id/role', (req, res) => {
+    const chatId = req.params.id;
+    const { adminId, targetUserId, role } = req.body; // role: 'admin' or 'member'
+
+    // Check if requester is admin or owner
+    const checkSql = `SELECT role FROM chat_participants WHERE chat_id = ? AND user_id = ?`;
+    db.get(checkSql, [chatId, adminId], (err, participant) => {
+        if (err || !participant || (participant.role !== 'admin' && participant.role !== 'owner')) {
+            return res.status(403).send("Permission denied.");
+        }
+
+        db.run(`UPDATE chat_participants SET role = ? WHERE chat_id = ? AND user_id = ?`, [role, chatId, targetUserId], (err) => {
+            if (err) return res.status(500).send("Error updating role.");
+            res.status(200).send({ message: "Role updated successfully" });
+        });
+    });
+});
+
+// Kick participant (Admin/Owner only)
+router.delete('/:id/participants/:userId', (req, res) => {
+    const chatId = req.params.id;
+    const targetUserId = req.params.userId;
+    const adminId = req.query.adminId;
+
+    db.get(`SELECT role FROM chat_participants WHERE chat_id = ? AND user_id = ?`, [chatId, adminId], (err, participant) => {
+        if (err || !participant || (participant.role !== 'admin' && participant.role !== 'owner')) {
+            return res.status(403).send("Permission denied.");
+        }
+
+        // Cannot kick the owner or another admin if you are just an admin
+        db.get(`SELECT role FROM chat_participants WHERE chat_id = ? AND user_id = ?`, [chatId, targetUserId], (err, target) => {
+            if (target && target.role === 'owner') return res.status(403).send("Cannot kick the owner.");
+            if (participant.role === 'admin' && target && target.role === 'admin') return res.status(403).send("Admins cannot kick other admins.");
+
+            db.run(`DELETE FROM chat_participants WHERE chat_id = ? AND user_id = ?`, [chatId, targetUserId], (err) => {
+                if (err) return res.status(500).send("Error removing participant.");
+                res.status(200).send({ message: "Participant removed successfully" });
+            });
+        });
+    });
+});
+
+// Get all participants for a chat
+router.get('/:id/participants', (req, res) => {
+    const chatId = req.params.id;
+    const sql = `
+        SELECT u.id, u.username, u.avatar, cp.role 
+        FROM users u
+        JOIN chat_participants cp ON u.id = cp.user_id
+        WHERE cp.chat_id = ?
+    `;
+    db.all(sql, [chatId], (err, participants) => {
+        if (err) return res.status(500).send("Error retrieving participants.");
+        res.status(200).send(participants);
     });
 });
 

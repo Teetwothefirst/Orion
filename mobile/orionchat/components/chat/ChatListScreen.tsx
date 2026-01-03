@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, Image, SafeAreaView, Dimensions, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, Image, SafeAreaView, Dimensions, ActivityIndicator, Modal, Alert, TextInput } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/context/AuthContext';
@@ -13,6 +13,8 @@ export default function ChatListScreen() {
     const [chats, setChats] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [showNewChatModal, setShowNewChatModal] = useState(false);
+    const [showJoinModal, setShowJoinModal] = useState(false);
+    const [inviteCode, setInviteCode] = useState('');
     const [onlineUsers, setOnlineUsers] = useState<Record<number, any>>({});
     const router = useRouter();
     const { user } = useAuth();
@@ -32,7 +34,48 @@ export default function ChatListScreen() {
                 socket.off('user_status');
             };
         }
-    }, [user]);
+    }, [user, activeTab]);
+
+    const handleJoinGroup = async () => {
+        if (!inviteCode) return;
+        try {
+            const response = await api.post(`/chats/join/${inviteCode}`, { userId: user?.id });
+            Alert.alert('Success', response.data.message);
+            setShowJoinModal(false);
+            setInviteCode('');
+            fetchChats();
+        } catch (error: any) {
+            Alert.alert('Error', error.response?.data || 'Failed to join group');
+        }
+    };
+
+    const handleStartChat = async (selection: any | any[], groupName?: string, isChannel?: boolean) => {
+        try {
+            if (Array.isArray(selection)) {
+                // Group/Channel creation
+                const response = await api.post('/chats', {
+                    userId: user?.id,
+                    type: isChannel ? 'channel' : 'group',
+                    name: groupName || (isChannel ? 'New Channel' : 'New Group'),
+                    participantIds: selection.map(u => u.id)
+                });
+                setShowNewChatModal(false);
+                fetchChats();
+                router.push(`/chat/\${response.data.id}` as any);
+            } else {
+                // Private chat
+                const response = await api.post('/chats', {
+                    userId: user?.id,
+                    otherUserId: selection.id
+                });
+                setShowNewChatModal(false);
+                fetchChats();
+                router.push(`/chat/${response.data.id}` as any);
+            }
+        } catch (error) {
+            console.error('Error starting chat:', error);
+        }
+    };
 
     const fetchChats = async () => {
         try {
@@ -47,33 +90,6 @@ export default function ChatListScreen() {
 
     const handleChatPress = (chatId: string) => {
         router.push(`/chat/${chatId}` as any);
-    };
-
-    const handleStartChat = async (selectedData: any, groupName?: string) => {
-        try {
-            let payload: any = { userId: user?.id };
-
-            if (Array.isArray(selectedData)) {
-                // Group Chat
-                payload.type = 'group';
-                payload.name = groupName || 'New Group';
-                payload.participantIds = selectedData.map(u => u.id);
-            } else {
-                // Private Chat
-                payload.type = 'private';
-                payload.otherUserId = selectedData.id;
-            }
-
-            const response = await api.post('/chats', payload);
-
-            setShowNewChatModal(false);
-            fetchChats(); // Refresh list
-
-            // Navigate to the new chat
-            router.push(`/chat/${response.data.id}`);
-        } catch (error) {
-            console.error('Error creating chat:', error);
-        }
     };
 
     const getFilteredChats = () => {
@@ -125,6 +141,9 @@ export default function ChatListScreen() {
                     <TouchableOpacity onPress={() => router.push('/search')}>
                         <Ionicons name="search" size={24} color="#007AFF" />
                     </TouchableOpacity>
+                    <TouchableOpacity onPress={() => setShowJoinModal(true)}>
+                        <Ionicons name="link" size={24} color="#007AFF" />
+                    </TouchableOpacity>
                     <TouchableOpacity onPress={() => setShowNewChatModal(true)}>
                         <Ionicons name="add" size={28} color="#007AFF" />
                     </TouchableOpacity>
@@ -172,11 +191,44 @@ export default function ChatListScreen() {
                 </View>
             </View>
 
+            {/* New Chat Modal */}
             <NewChatModal
                 visible={showNewChatModal}
                 onClose={() => setShowNewChatModal(false)}
                 onUserSelect={handleStartChat}
             />
+
+            {/* Join Group Modal */}
+            <Modal
+                visible={showJoinModal}
+                animationType="fade"
+                transparent={true}
+                onRequestClose={() => setShowJoinModal(false)}
+            >
+                <View style={[styles.modalOverlay, { justifyContent: 'center', padding: 20 }]}>
+                    <View style={[styles.modalContent, { height: 'auto', borderRadius: 16, padding: 20 }]}>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 15 }}>
+                            <Text style={{ fontSize: 18, fontWeight: 'bold' }}>Join Group</Text>
+                            <TouchableOpacity onPress={() => setShowJoinModal(false)}>
+                                <Ionicons name="close" size={24} color="#000" />
+                            </TouchableOpacity>
+                        </View>
+                        <TextInput
+                            style={{ backgroundColor: '#F0F0F0', padding: 12, borderRadius: 8, fontSize: 16, marginBottom: 15 }}
+                            placeholder="Enter Invite Code"
+                            value={inviteCode}
+                            onChangeText={setInviteCode}
+                            autoCapitalize="none"
+                        />
+                        <TouchableOpacity
+                            style={{ backgroundColor: '#007AFF', padding: 14, borderRadius: 8, alignItems: 'center' }}
+                            onPress={handleJoinGroup}
+                        >
+                            <Text style={{ color: 'white', fontWeight: 'bold' }}>Join Community</Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            </Modal>
         </SafeAreaView>
     );
 }
@@ -311,4 +363,11 @@ const styles = StyleSheet.create({
     activeTabText: {
         color: 'white',
     },
+    modalOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0,0,0,0.5)',
+    },
+    modalContent: {
+        backgroundColor: 'white',
+    }
 });

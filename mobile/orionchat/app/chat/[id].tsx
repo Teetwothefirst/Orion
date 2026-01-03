@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, FlatList, SafeAreaView, KeyboardAvoidingView, Platform, Image, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, FlatList, SafeAreaView, KeyboardAvoidingView, Platform, Image, ActivityIndicator, Modal, ScrollView } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '@/context/AuthContext';
@@ -35,6 +35,9 @@ export default function ChatRoomScreen() {
     const [contacts, setContacts] = useState<any[]>([]);
     const [onlineUsers, setOnlineUsers] = useState<Record<number, any>>({});
     const [chatInfo, setChatInfo] = useState<any>(null);
+    const [showGroupInfo, setShowGroupInfo] = useState(false);
+    const [participants, setParticipants] = useState<any[]>([]);
+    const [myRole, setMyRole] = useState('member');
     const flatListRef = useRef<FlatList>(null);
     const { user } = useAuth();
     const router = useRouter();
@@ -87,13 +90,55 @@ export default function ChatRoomScreen() {
 
     const fetchChatInfo = async () => {
         try {
-            const response = await api.get(`/chats?userId=${user?.id}`);
+            const response = await api.get(`/chats?userId=\${user?.id}`);
             const chat = response.data.find((c: any) => c.id.toString() === id);
             if (chat) {
                 setChatInfo(chat);
             }
         } catch (error) {
             console.error('Error fetching chat info:', error);
+        }
+    };
+
+    const fetchParticipants = async () => {
+        try {
+            const response = await api.get(`/chats/\${id}/participants`);
+            setParticipants(response.data);
+            const me = response.data.find((p: any) => p.id === user?.id);
+            if (me) setMyRole(me.role);
+        } catch (error) {
+            console.error('Error fetching participants:', error);
+        }
+    };
+
+    const handleRemoveParticipant = async (targetUserId: number) => {
+        Alert.alert('Remove Participant', 'Are you sure?', [
+            { text: 'Cancel', style: 'cancel' },
+            {
+                text: 'Remove',
+                style: 'destructive',
+                onPress: async () => {
+                    try {
+                        await api.delete(`/chats/\${id}/participants/\${targetUserId}?adminId=\${user?.id}`);
+                        fetchParticipants();
+                    } catch (error: any) {
+                        Alert.alert('Error', error.response?.data || 'Failed to remove participant');
+                    }
+                }
+            }
+        ]);
+    };
+
+    const handleUpdateRole = async (targetUserId: number, newRole: string) => {
+        try {
+            await api.post(`/chats/\${id}/role`, {
+                adminId: user?.id,
+                targetUserId,
+                role: newRole
+            });
+            fetchParticipants();
+        } catch (error: any) {
+            Alert.alert('Error', error.response?.data || 'Failed to update role');
         }
     };
 
@@ -286,14 +331,24 @@ export default function ChatRoomScreen() {
         const status = otherUserId ? onlineUsers[otherUserId] : null;
 
         return (
-            <View style={{ alignItems: 'center' }}>
-                <Text style={styles.headerTitle}>{chatInfo?.name || 'Chat'}</Text>
-                {status && (
-                    <Text style={[styles.statusText, status.status === 'online' && { color: '#4CD964' }]}>
-                        {status.status === 'online' ? 'Online' :
-                            status.lastSeen ? `Last seen ${new Date(status.lastSeen).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` :
-                                'Offline'}
-                    </Text>
+            <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingRight: 15 }}>
+                <View style={{ flex: 1, alignItems: 'center' }}>
+                    <Text style={styles.headerTitle}>{chatInfo?.name || 'Chat'}</Text>
+                    {status && (
+                        <Text style={[styles.statusText, status.status === 'online' && { color: '#4CD964' }]}>
+                            {status.status === 'online' ? 'Online' :
+                                status.lastSeen ? `Last seen ${new Date(status.lastSeen).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` :
+                                    'Offline'}
+                        </Text>
+                    )}
+                </View>
+                {chatInfo?.type !== 'private' && (
+                    <TouchableOpacity onPress={() => {
+                        fetchParticipants();
+                        setShowGroupInfo(true);
+                    }}>
+                        <Ionicons name="information-circle-outline" size={24} color="#007AFF" />
+                    </TouchableOpacity>
                 )}
             </View>
         );
@@ -392,6 +447,78 @@ export default function ChatRoomScreen() {
                     </View>
                 </View>
             )}
+
+            {/* Group Info Modal */}
+            <Modal
+                visible={showGroupInfo}
+                animationType="slide"
+                transparent={true}
+                onRequestClose={() => setShowGroupInfo(false)}
+            >
+                <View style={styles.modalOverlay}>
+                    <View style={styles.modalContent}>
+                        <View style={styles.modalHeader}>
+                            <Text style={styles.modalTitle}>Group Info</Text>
+                            <TouchableOpacity onPress={() => setShowGroupInfo(false)}>
+                                <Ionicons name="close" size={24} color="#000" />
+                            </TouchableOpacity>
+                        </View>
+
+                        <ScrollView style={{ padding: 20 }}>
+                            <View style={{ alignItems: 'center', marginBottom: 20 }}>
+                                <View style={[styles.avatar, { width: 80, height: 80, borderRadius: 40, backgroundColor: '#E1E1E1', justifyContent: 'center', alignItems: 'center' }]}>
+                                    <Text style={{ fontSize: 32 }}>{chatInfo?.avatar || '👥'}</Text>
+                                </View>
+                                <Text style={{ fontSize: 22, fontWeight: 'bold', marginTop: 10 }}>{chatInfo?.name}</Text>
+
+                                {chatInfo?.invite_code && (
+                                    <TouchableOpacity
+                                        style={styles.inviteLinkContainer}
+                                        onPress={() => Alert.alert('Invite Code', chatInfo.invite_code)}
+                                    >
+                                        <Text style={styles.inviteLinkText}>Invite Code: {chatInfo.invite_code}</Text>
+                                        <Ionicons name="copy-outline" size={16} color="#007AFF" />
+                                    </TouchableOpacity>
+                                )}
+                            </View>
+
+                            <Text style={styles.sectionTitle}>Participants ({participants.length})</Text>
+                            {participants.map((p: any) => (
+                                <View key={p.id} style={styles.participantItem}>
+                                    <Image source={{ uri: p.avatar || 'https://i.pravatar.cc/100' }} style={styles.participantAvatar} />
+                                    <View style={{ flex: 1, marginLeft: 12 }}>
+                                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                                            <Text style={styles.participantName}>{p.username} {p.id === user?.id ? '(You)' : ''}</Text>
+                                            <Text style={styles.roleTag}>{p.role}</Text>
+                                        </View>
+
+                                        {(myRole === 'owner' || myRole === 'admin') && p.id !== user?.id && (
+                                            <View style={{ flexDirection: 'row', marginTop: 8 }}>
+                                                {myRole === 'owner' && (
+                                                    <TouchableOpacity
+                                                        style={styles.adminActionBtn}
+                                                        onPress={() => handleUpdateRole(p.id, p.role === 'admin' ? 'member' : 'admin')}
+                                                    >
+                                                        <Text style={styles.adminActionText}>{p.role === 'admin' ? 'Demote' : 'Promote'}</Text>
+                                                    </TouchableOpacity>
+                                                )}
+                                                <TouchableOpacity
+                                                    style={[styles.adminActionBtn, { backgroundColor: '#FF3B30', marginLeft: 8 }]}
+                                                    onPress={() => handleRemoveParticipant(p.id)}
+                                                    disabled={p.role === 'owner' || (myRole === 'admin' && p.role === 'admin')}
+                                                >
+                                                    <Text style={[styles.adminActionText, { color: 'white' }]}>Remove</Text>
+                                                </TouchableOpacity>
+                                            </View>
+                                        )}
+                                    </View>
+                                </View>
+                            ))}
+                            <View style={{ height: 40 }} />
+                        </ScrollView>
+                    </View>
+                </View>
+            </Modal>
         </SafeAreaView>
     );
 }
@@ -421,6 +548,92 @@ const styles = StyleSheet.create({
     statusText: {
         fontSize: 12,
         color: '#888',
+    },
+    emptyState: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    modalOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0,0,0,0.5)',
+        justifyContent: 'flex-end',
+    },
+    modalContent: {
+        backgroundColor: 'white',
+        borderTopLeftRadius: 20,
+        borderTopRightRadius: 20,
+        height: '80%',
+    },
+    modalHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        padding: 20,
+        borderBottomWidth: 1,
+        borderBottomColor: '#F0F0F0',
+    },
+    modalTitle: {
+        fontSize: 18,
+        fontWeight: 'bold',
+    },
+    sectionTitle: {
+        fontSize: 14,
+        fontWeight: 'bold',
+        color: '#666',
+        textTransform: 'uppercase',
+        marginBottom: 10,
+    },
+    participantItem: {
+        flexDirection: 'row',
+        paddingVertical: 12,
+        borderBottomWidth: 1,
+        borderBottomColor: '#F0F0F0',
+        alignItems: 'center',
+    },
+    participantAvatar: {
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+    },
+    participantName: {
+        fontSize: 16,
+        fontWeight: '500',
+    },
+    roleTag: {
+        fontSize: 10,
+        fontWeight: 'bold',
+        color: '#007AFF',
+        backgroundColor: '#E5F1FF',
+        paddingHorizontal: 6,
+        paddingVertical: 2,
+        borderRadius: 4,
+        textTransform: 'uppercase',
+    },
+    inviteLinkContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#F8F8F8',
+        padding: 10,
+        borderRadius: 8,
+        marginTop: 10,
+        gap: 8,
+    },
+    inviteLinkText: {
+        fontSize: 14,
+        color: '#007AFF',
+        fontWeight: '500',
+    },
+    adminActionBtn: {
+        backgroundColor: '#F0F0F0',
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderRadius: 6,
+    },
+    adminActionText: {
+        fontSize: 12,
+        fontWeight: '600',
+        color: '#007AFF',
     },
     loadingContainer: {
         flex: 1,

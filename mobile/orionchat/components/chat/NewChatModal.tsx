@@ -14,7 +14,7 @@ interface User {
 interface NewChatModalProps {
     visible: boolean;
     onClose: () => void;
-    onUserSelect: (user: User | User[], name?: string) => void;
+    onUserSelect: (user: User | User[], name?: string, isChannel?: boolean) => void;
 }
 
 export default function NewChatModal({ visible, onClose, onUserSelect }: NewChatModalProps) {
@@ -22,6 +22,7 @@ export default function NewChatModal({ visible, onClose, onUserSelect }: NewChat
     const [users, setUsers] = useState<User[]>([]);
     const [selectedUsers, setSelectedUsers] = useState<User[]>([]);
     const [groupName, setGroupName] = useState('');
+    const [isChannel, setIsChannel] = useState(false);
     const [loading, setLoading] = useState(false);
     const { user: currentUser } = useAuth();
 
@@ -33,6 +34,7 @@ export default function NewChatModal({ visible, onClose, onUserSelect }: NewChat
             setUsers([]);
             setSelectedUsers([]);
             setGroupName('');
+            setIsChannel(false);
         }
     }, [visible]);
 
@@ -70,7 +72,7 @@ export default function NewChatModal({ visible, onClose, onUserSelect }: NewChat
 
     const handleCreateGroup = () => {
         if (selectedUsers.length === 0) return;
-        onUserSelect(selectedUsers, groupName);
+        onUserSelect(selectedUsers, groupName, isChannel);
     };
 
     const handleSingleUserPress = (user: User) => {
@@ -130,13 +132,24 @@ export default function NewChatModal({ visible, onClose, onUserSelect }: NewChat
                         <Text style={styles.selectedCount}>{selectedUsers.length} selected</Text>
                         <TextInput
                             style={styles.groupNameInput}
-                            placeholder="Group Name (Optional)"
+                            placeholder="Group/Channel Name (Optional)"
                             placeholderTextColor="#666"
                             value={groupName}
                             onChangeText={setGroupName}
                         />
+                        <TouchableOpacity
+                            style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}
+                            onPress={() => setIsChannel(!isChannel)}
+                        >
+                            <Ionicons
+                                name={isChannel ? "checkbox" : "square-outline"}
+                                size={20}
+                                color={isChannel ? "#007AFF" : "#666"}
+                            />
+                            <Text style={{ color: 'white', fontSize: 14 }}>Create as Public Channel</Text>
+                        </TouchableOpacity>
                         <TouchableOpacity style={styles.createButton} onPress={handleCreateGroup}>
-                            <Text style={styles.createButtonText}>Create Group</Text>
+                            <Text style={styles.createButtonText}>Create {isChannel ? 'Channel' : 'Group'}</Text>
                         </TouchableOpacity>
                     </View>
                 )}

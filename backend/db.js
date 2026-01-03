@@ -98,11 +98,14 @@ const initDb = () => {
             id ${isPostgres ? 'SERIAL PRIMARY KEY' : 'INTEGER PRIMARY KEY AUTOINCREMENT'},
             name TEXT,
             type TEXT DEFAULT 'private',
+            creator_id INTEGER,
+            invite_code TEXT UNIQUE,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )`,
         `CREATE TABLE IF NOT EXISTS chat_participants (
             chat_id INTEGER,
             user_id INTEGER,
+            role TEXT DEFAULT 'member', -- 'owner', 'admin', 'member'
             PRIMARY KEY (chat_id, user_id)
         )`,
         `CREATE TABLE IF NOT EXISTS messages (
@@ -142,6 +145,11 @@ const initDb = () => {
             db.run("ALTER TABLE messages ADD COLUMN status TEXT DEFAULT 'sent'", (err) => { /* ignore */ });
             db.run("ALTER TABLE messages ADD COLUMN reply_to_id INTEGER", (err) => { /* ignore */ });
             db.run("ALTER TABLE messages ADD COLUMN forwarded_from_id INTEGER", (err) => { /* ignore */ });
+
+            // Phase 4 migrations
+            db.run("ALTER TABLE chats ADD COLUMN creator_id INTEGER", (err) => { /* ignore */ });
+            db.run("ALTER TABLE chats ADD COLUMN invite_code TEXT UNIQUE", (err) => { /* ignore */ });
+            db.run("ALTER TABLE chat_participants ADD COLUMN role TEXT DEFAULT 'member'", (err) => { /* ignore */ });
         });
     }
 };

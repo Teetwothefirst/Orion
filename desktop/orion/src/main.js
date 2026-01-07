@@ -33,6 +33,8 @@ const createWindow = () => {
         ...details.responseHeaders,
         'Content-Security-Policy': [
           "default-src 'self' 'unsafe-inline' data:; " +
+          "img-src 'self' data: https://res.cloudinary.com; " +
+          "media-src 'self' https://res.cloudinary.com; " +
           "connect-src 'self' http://127.0.0.1:3001 http://localhost:3001 ws://127.0.0.1:3001 ws://localhost:3001 https://*.onrender.com wss://*.onrender.com; " +
           "script-src 'self' 'unsafe-inline' 'unsafe-eval';"
         ]

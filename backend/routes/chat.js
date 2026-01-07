@@ -72,7 +72,7 @@ router.get('/', (req, res) => {
     db.all(sql, [userId, userId, userId], (err, chats) => {
         if (err) {
             console.error('Error retrieving chats:', err);
-            return res.status(500).send("Error retrieving chats.");
+            return res.status(500).send("Error retrieving chats: " + err.message);
         }
         res.status(200).send(chats);
     });
@@ -94,6 +94,10 @@ router.post('/', (req, res) => {
         `;
 
         db.get(checkSql, [userId, otherUserId], (err, chat) => {
+            if (err) {
+                console.error('Error checking existing chat:', err);
+                return res.status(500).send("Error checking existing chat: " + err.message);
+            }
             if (chat) {
                 return res.status(200).send(chat);
             }
@@ -109,19 +113,32 @@ router.post('/', (req, res) => {
         const inviteCode = type !== 'private' ? generateInviteCode() : null;
         db.run(`INSERT INTO chats (name, type, creator_id, invite_code) VALUES (?, ?, ?, ?)`,
             [name, type, creatorId, inviteCode], function (err) {
-                if (err) return res.status(500).send("Error creating chat.");
+                if (err) {
+                    console.error('Error inserting chat:', err);
+                    return res.status(500).send("Error creating chat entry: " + err.message);
+                }
                 const chatId = this.lastID;
+                if (!chatId) {
+                    console.error('Failed to get lastID after chat insertion');
+                    return res.status(500).send("Error: Internal ID generation failure.");
+                }
 
                 // Add owner
                 db.run(`INSERT INTO chat_participants (chat_id, user_id, role) VALUES (?, ?, 'owner')`, [chatId, creatorId], (err) => {
-                    if (err) return res.status(500).send("Error adding owner.");
+                    if (err) {
+                        console.error('Error adding owner:', err);
+                        return res.status(500).send("Error adding owner to chat: " + err.message);
+                    }
 
                     const memberIds = participants.filter(id => id !== creatorId);
                     if (memberIds.length > 0) {
                         const placeholders = memberIds.map(() => '(?, ?, \'member\')').join(',');
                         const values = memberIds.flatMap(uid => [chatId, uid]);
                         db.run(`INSERT INTO chat_participants (chat_id, user_id, role) VALUES ${placeholders}`, values, (err) => {
-                            if (err) return res.status(500).send("Error adding members.");
+                            if (err) {
+                                console.error('Error adding members:', err);
+                                return res.status(500).send("Error adding members to chat: " + err.message);
+                            }
                             res.status(200).send({ id: chatId, name: name, type: type, invite_code: inviteCode });
                         });
                     } else {

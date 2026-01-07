@@ -29,13 +29,25 @@ if (process.env.DATABASE_URL) {
             });
         },
         run: function (text, params, callback) {
-            // Postgres doesn't have this.lastID in the same way. 
-            // We append RETURNING id if it's an insert to mimic behavior for the specific usage in our routes.
             let queryText = translateParams(text);
-            if (queryText.trim().toUpperCase().startsWith('INSERT')) {
+            const isInsert = queryText.trim().toUpperCase().startsWith('INSERT');
+            const hasReturning = queryText.toUpperCase().includes('RETURNING');
+
+            // Only append RETURNING id if it's an insert, doesn't have one, 
+            // and isn't a known table without an id (though we are adding id to chat_participants)
+            if (isInsert && !hasReturning) {
                 queryText += ' RETURNING id';
             }
+
             pool.query(queryText, params, (err, res) => {
+                // If it fails with "column id does not exist", retry without RETURNING id
+                if (err && err.message.includes('column "id" does not exist') && isInsert && !hasReturning) {
+                    const originalQuery = translateParams(text);
+                    return pool.query(originalQuery, params, (retryErr, retryRes) => {
+                        if (callback) callback.call({}, retryErr);
+                    });
+                }
+
                 const result = res ? { lastID: res.rows[0]?.id } : {};
                 if (callback) callback.call(result, err);
             });
@@ -103,10 +115,10 @@ const initDb = () => {
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )`,
         `CREATE TABLE IF NOT EXISTS chat_participants (
+            id ${isPostgres ? 'SERIAL PRIMARY KEY' : 'INTEGER PRIMARY KEY AUTOINCREMENT'},
             chat_id INTEGER,
             user_id INTEGER,
-            role TEXT DEFAULT 'member', -- 'owner', 'admin', 'member'
-            PRIMARY KEY (chat_id, user_id)
+            role TEXT DEFAULT 'member' -- 'owner', 'admin', 'member'
         )`,
         `CREATE TABLE IF NOT EXISTS messages (
             id ${isPostgres ? 'SERIAL PRIMARY KEY' : 'INTEGER PRIMARY KEY AUTOINCREMENT'},
@@ -144,6 +156,8 @@ const initDb = () => {
         db.query("ALTER TABLE messages ADD COLUMN IF NOT EXISTS forwarded_from_id INTEGER").catch(() => { });
         db.query("ALTER TABLE chats ADD COLUMN IF NOT EXISTS creator_id INTEGER").catch(() => { });
         db.query("ALTER TABLE chats ADD COLUMN IF NOT EXISTS invite_code TEXT UNIQUE").catch(() => { });
+        db.query("ALTER TABLE chat_participants ADD COLUMN IF NOT EXISTS id SERIAL PRIMARY KEY").catch(() => { });
+        db.query("ALTER TABLE chat_participants ADD COLUMN IF NOT EXISTS role TEXT DEFAULT 'member'").catch(() => { });
     } else {
         db.serialize(() => {
             queries.forEach(q => db.run(q));

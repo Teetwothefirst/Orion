@@ -89,10 +89,10 @@ const sendBugReportEmail = async (data) => {
     try {
         await transporter.sendMail(mailOptions);
         console.log(`${type} sent to ${recipient}`);
-        return true;
+        return { success: true };
     } catch (error) {
         console.error(`Error sending ${type.toLowerCase()}:`, error);
-        return false;
+        return { success: false, error: error.message };
     }
 };
 

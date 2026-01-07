@@ -61,7 +61,7 @@ export default function ChatListScreen() {
                 });
                 setShowNewChatModal(false);
                 fetchChats();
-                router.push(`/chat/\${response.data.id}` as any);
+                router.push(`/chat/${response.data.id}` as any);
             } else {
                 // Private chat
                 const response = await api.post('/chats', {

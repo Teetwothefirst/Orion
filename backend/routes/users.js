@@ -97,7 +97,7 @@ router.put('/profile', upload.single('avatar'), (req, res) => {
     }
 
     params.push(userId);
-    const sql = `UPDATE users SET \${fields.join(', ')} WHERE id = ?`;
+    const sql = `UPDATE users SET ${fields.join(', ')} WHERE id = ?`;
 
     db.run(sql, params, function (err) {
         if (err) {

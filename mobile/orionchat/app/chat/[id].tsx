@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '@/context/AuthContext';
 import { api, socket } from '@/services/api';
 import * as ImagePicker from 'expo-image-picker';
+import { Video, ResizeMode } from 'expo-av';
 import { Alert } from 'react-native';
 
 interface Message {
@@ -90,7 +91,7 @@ export default function ChatRoomScreen() {
 
     const fetchChatInfo = async () => {
         try {
-            const response = await api.get(`/chats?userId=\${user?.id}`);
+            const response = await api.get(`/chats?userId=${user?.id}`);
             const chat = response.data.find((c: any) => c.id.toString() === id);
             if (chat) {
                 setChatInfo(chat);
@@ -102,7 +103,7 @@ export default function ChatRoomScreen() {
 
     const fetchParticipants = async () => {
         try {
-            const response = await api.get(`/chats/\${id}/participants`);
+            const response = await api.get(`/chats/${id}/participants`);
             setParticipants(response.data);
             const me = response.data.find((p: any) => p.id === user?.id);
             if (me) setMyRole(me.role);
@@ -119,7 +120,7 @@ export default function ChatRoomScreen() {
                 style: 'destructive',
                 onPress: async () => {
                     try {
-                        await api.delete(`/chats/\${id}/participants/\${targetUserId}?adminId=\${user?.id}`);
+                        await api.delete(`/chats/${id}/participants/${targetUserId}?adminId=${user?.id}`);
                         fetchParticipants();
                     } catch (error: any) {
                         Alert.alert('Error', error.response?.data || 'Failed to remove participant');
@@ -131,7 +132,7 @@ export default function ChatRoomScreen() {
 
     const handleUpdateRole = async (targetUserId: number, newRole: string) => {
         try {
-            await api.post(`/chats/\${id}/role`, {
+            await api.post(`/chats/${id}/role`, {
                 adminId: user?.id,
                 targetUserId,
                 role: newRole
@@ -289,10 +290,17 @@ export default function ChatRoomScreen() {
                     )}
 
                     {item.type === 'video' && (
-                        <View style={styles.mediaPlaceholder}>
-                            <Ionicons name="play-circle" size={40} color="white" />
-                            <Text style={{ color: 'white', marginTop: 4 }}>Video</Text>
-                        </View>
+                        <Video
+                            source={{ uri: item.media_url || '' }}
+                            rate={1.0}
+                            volume={1.0}
+                            isMuted={false}
+                            resizeMode={ResizeMode.COVER}
+                            shouldPlay={false}
+                            isLooping
+                            useNativeControls
+                            style={styles.mediaVideo}
+                        />
                     )}
 
                     {item.type === 'document' && (
@@ -779,6 +787,12 @@ const styles = StyleSheet.create({
         borderRadius: 12,
         justifyContent: 'center',
         alignItems: 'center',
+        marginBottom: 8,
+    },
+    mediaVideo: {
+        width: 200,
+        height: 150,
+        borderRadius: 12,
         marginBottom: 8,
     },
 });

@@ -21,11 +21,11 @@ export const AuthProvider = ({ children }) => {
             return true;
         } catch (error) {
             console.error('Login error:', error);
-            setError(
-                error.response?.data?.message ||
-                error.response?.data ||
-                'Unable to connect to server. Please check your connection.'
-            );
+            const errorData = error.response?.data;
+            const message = typeof errorData === 'string'
+                ? errorData
+                : (errorData?.message || errorData?.error || 'Invalid credentials');
+            setError(message);
             return false;
         } finally {
             setIsLoading(false);
@@ -44,11 +44,11 @@ export const AuthProvider = ({ children }) => {
             return true;
         } catch (error) {
             console.error('Register error:', error);
-            setError(
-                error.response?.data?.message ||
-                error.response?.data ||
-                'Unable to connect to server. Please check your connection.'
-            );
+            const errorData = error.response?.data;
+            const message = typeof errorData === 'string'
+                ? errorData
+                : (errorData?.message || errorData?.error || 'Registration failed');
+            setError(message);
             return false;
         } finally {
             setIsLoading(false);
@@ -62,7 +62,11 @@ export const AuthProvider = ({ children }) => {
             const response = await api.post('/auth/forgot-password', { email });
             return response.data;
         } catch (error) {
-            setError(error.response?.data || 'Failed to send reset link');
+            const errorData = error.response?.data;
+            const message = typeof errorData === 'string'
+                ? errorData
+                : (errorData?.message || errorData?.error || 'Failed to send reset link');
+            setError(message);
             return null;
         } finally {
             setIsLoading(false);
@@ -76,7 +80,11 @@ export const AuthProvider = ({ children }) => {
             const response = await api.post('/auth/reset-password', { token, newPassword });
             return response.data;
         } catch (error) {
-            setError(error.response?.data || 'Failed to reset password');
+            const errorData = error.response?.data;
+            const message = typeof errorData === 'string'
+                ? errorData
+                : (errorData?.message || errorData?.error || 'Failed to reset password');
+            setError(message);
             return null;
         } finally {
             setIsLoading(false);

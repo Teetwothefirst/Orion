@@ -206,7 +206,7 @@ const LoginForm = ({ onSwitchToSignup, onSwitchToForgotPassword }) => {
             fontSize: '14px',
             textAlign: 'center'
           }}>
-            {error}
+            {String(error)}
           </div>
         )}
 

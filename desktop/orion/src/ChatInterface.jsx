@@ -686,7 +686,7 @@ const ChatInterface = () => {
                       onlineUsers[selectedContact.id]?.status === 'online' ? (
                         <span style={{ color: '#10b981' }}>Online</span>
                       ) : onlineUsers[selectedContact.id]?.lastSeen || selectedContact.lastSeen ? (
-                        `Last seen \${new Date(onlineUsers[selectedContact.id]?.lastSeen || selectedContact.lastSeen).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+                        `Last seen ${new Date(onlineUsers[selectedContact.id]?.lastSeen || selectedContact.lastSeen).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
                       ) : (
                         'Last seen recently'
                       )

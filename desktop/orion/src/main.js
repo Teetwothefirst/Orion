@@ -13,7 +13,7 @@ const createWindow = () => {
     height: 600,
     autoHideMenuBar: true, // Hide menu bar
     webPreferences: {
-      preload: MAIN_WINDOW_PRELOAD_WEBPACK_ENTRY,
+      preload: path.join(__dirname, '../../src/preload.js'),
       webSecurity: false, // Disable web security to allow API calls in development
       nodeIntegration: false,
       contextIsolation: true,

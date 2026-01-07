@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { X, Send, AlertTriangle } from 'lucide-react';
 import { reportBug } from '../services/SupportService';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../context/AuthContext.jsx';
 
 const BugReportModal = ({ onClose }) => {
     const [description, setDescription] = useState('');

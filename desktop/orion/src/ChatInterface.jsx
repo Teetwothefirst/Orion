@@ -630,32 +630,7 @@ const ChatInterface = () => {
 
       </div>
 
-      {/* Support Link */}
-      <div style={{ padding: '10px 16px', borderTop: '1px solid #f3f4f6' }}>
-        <span
-          style={{ fontSize: '12px', color: '#6b7280', cursor: 'pointer', textDecoration: 'underline' }}
-          onClick={() => setShowBugReport(true)}
-        >
-          Report a Bug
-        </span>
-      </div>
-
-      {/* Logout Button */}
-      <div>
-        <div style={styles.logout}>
-          <button onClick={handleLogout} className='btn btn-login' style={{
-            background: 'red',
-            padding: '8px 16px',
-            color: 'white',
-            textDecoration: 'none',
-            borderRadius: '10px',
-            border: 'none',
-            cursor: 'pointer',
-            marginTop: '10px',
-            marginBottom: '10px'
-          }}>Logout</button>
-        </div>
-      </div>
+      {/* Support and Logout removed from here for a cleaner UI */}
 
       {/* Main Chat Area */}
       <div style={styles.mainChat}>
@@ -1028,6 +1003,49 @@ const ChatInterface = () => {
                 >
                   Save Changes
                 </button>
+
+                <div style={{ marginTop: '20px', paddingTop: '20px', borderTop: '1px solid #f3f4f6', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowProfileModal(false);
+                      setShowBugReport(true);
+                    }}
+                    style={{
+                      width: '100%',
+                      padding: '10px',
+                      backgroundColor: 'transparent',
+                      color: '#4b5563',
+                      border: '1px solid #d1d5db',
+                      borderRadius: '6px',
+                      cursor: 'pointer',
+                      fontSize: '14px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '8px'
+                    }}
+                  >
+                    <Bell size={16} /> Report a Bug
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleLogout}
+                    style={{
+                      width: '100%',
+                      padding: '10px',
+                      backgroundColor: '#fee2e2',
+                      color: '#ef4444',
+                      border: 'none',
+                      borderRadius: '6px',
+                      cursor: 'pointer',
+                      fontWeight: 'bold',
+                      fontSize: '14px'
+                    }}
+                  >
+                    Logout
+                  </button>
+                </div>
               </form>
             </div>
           </div>

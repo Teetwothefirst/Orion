@@ -32,7 +32,10 @@ router.get('/', (req, res) => {
     sql += ' ORDER BY username ASC';
 
     db.all(sql, params, (err, users) => {
-        if (err) return res.status(500).send("Error retrieving users.");
+        if (err) {
+            console.error('Error retrieving users:', err);
+            return res.status(500).send("Error retrieving users: " + err.message);
+        }
         res.status(200).send(users);
     });
 });
@@ -61,7 +64,10 @@ router.get('/search', (req, res) => {
     sql += ' ORDER BY username ASC LIMIT 20';
 
     db.all(sql, params, (err, users) => {
-        if (err) return res.status(500).send("Error searching users.");
+        if (err) {
+            console.error('Error searching users:', err);
+            return res.status(500).send("Error searching users: " + err.message);
+        }
         res.status(200).send(users);
     });
 });

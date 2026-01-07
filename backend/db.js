@@ -131,6 +131,19 @@ const initDb = () => {
 
     if (isPostgres) {
         queries.forEach(q => db.query(q).catch(err => console.error('PG Init Error:', err.message)));
+
+        // Postgres Migrations (handling missing columns)
+        db.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS bio TEXT").catch(() => { });
+        db.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP").catch(() => { });
+
+        // Phase 2-4 migrations for Postgres
+        db.query("ALTER TABLE messages ADD COLUMN IF NOT EXISTS type TEXT DEFAULT 'text'").catch(() => { });
+        db.query("ALTER TABLE messages ADD COLUMN IF NOT EXISTS media_url TEXT").catch(() => { });
+        db.query("ALTER TABLE messages ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'sent'").catch(() => { });
+        db.query("ALTER TABLE messages ADD COLUMN IF NOT EXISTS reply_to_id INTEGER").catch(() => { });
+        db.query("ALTER TABLE messages ADD COLUMN IF NOT EXISTS forwarded_from_id INTEGER").catch(() => { });
+        db.query("ALTER TABLE chats ADD COLUMN IF NOT EXISTS creator_id INTEGER").catch(() => { });
+        db.query("ALTER TABLE chats ADD COLUMN IF NOT EXISTS invite_code TEXT UNIQUE").catch(() => { });
     } else {
         db.serialize(() => {
             queries.forEach(q => db.run(q));

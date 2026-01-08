@@ -21,8 +21,9 @@ const sendPushNotification = async (userId, title, body, data = {}) => {
                     'Content-Type': 'application/json',
                 },
             });
+            console.log(`Push notification sent to user ${userId}`);
         } catch (error) {
-            console.error('Error sending push notification:', error.message);
+            console.error('Error sending push notification to Expo:', error.response?.data || error.message);
         }
     });
 };
@@ -100,7 +101,7 @@ module.exports = (io, socket) => {
                             if (!err && participants) {
                                 participants.forEach(p => {
                                     const notificationBody = msgType === 'text' ? content : `Sent a ${msgType}`;
-                                    sendPushNotification(p.user_id, messageData.username, notificationBody, { chatId });
+                                    sendPushNotification(p.user_id, messageData.username, notificationBody, { chatId: parseInt(chatId) });
                                 });
                             }
                         });

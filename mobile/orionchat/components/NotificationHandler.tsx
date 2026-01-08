@@ -5,6 +5,7 @@ import { Platform } from 'react-native';
 import Constants from 'expo-constants';
 import { api } from '@/services/api';
 import { useAuth } from '@/context/AuthContext';
+import { useRouter } from 'expo-router';
 
 // Configure how notifications should be handled when the app is in foreground
 Notifications.setNotificationHandler({
@@ -12,11 +13,14 @@ Notifications.setNotificationHandler({
         shouldShowAlert: true,
         shouldPlaySound: true,
         shouldSetBadge: false,
+        shouldShowBanner: true,
+        shouldShowList: true,
     }),
 });
 
 export default function NotificationHandler() {
     const { user } = useAuth();
+    const router = useRouter();
 
     useEffect(() => {
         if (user) {
@@ -32,7 +36,7 @@ export default function NotificationHandler() {
         }
     }, [user]);
 
-    // Handle incoming notifications (optional: for analytics or navigation)
+    // Handle incoming notifications (e.g., navigate to chat when clicked)
     useEffect(() => {
         const notificationListener = Notifications.addNotificationReceivedListener(notification => {
             console.log('Notification received in foreground:', notification);
@@ -40,14 +44,18 @@ export default function NotificationHandler() {
 
         const responseListener = Notifications.addNotificationResponseReceivedListener(response => {
             console.log('Notification clicked:', response);
-            // Example: navigate to the chat room
-            // const chatId = response.notification.request.content.data.chatId;
-            // if (chatId) router.push(`/chat/${chatId}`);
+
+            // Navigate to the chat room
+            const chatId = response.notification.request.content.data?.chatId;
+            if (chatId) {
+                // Ensure the path is correct for expo-router
+                router.push({ pathname: '/chat/[id]', params: { id: chatId.toString() } });
+            }
         });
 
         return () => {
-            Notifications.removeNotificationSubscription(notificationListener);
-            Notifications.removeNotificationSubscription(responseListener);
+            notificationListener.remove();
+            responseListener.remove();
         };
     }, []);
 

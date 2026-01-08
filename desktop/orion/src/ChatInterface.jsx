@@ -82,10 +82,26 @@ const ChatInterface = () => {
       // Native Desktop Notification
       if (message.sender_id !== user.id && !document.hasFocus()) {
         if ("Notification" in window && Notification.permission === "granted") {
-          new Notification(message.username, {
+          const notification = new Notification(message.username, {
             body: message.type === 'text' ? message.content : `Sent a ${message.type}`,
             icon: message.avatar || '👤'
           });
+
+          notification.onclick = () => {
+            window.focus();
+            // We use the chatId from the message to find the chat in the contacts list
+            // Note: contacts is available in the component scope
+            const contact = contacts.find(c => c.id === message.chat_id);
+            if (contact) {
+              setSelectedContact(contact);
+            } else {
+              // If not found (maybe first message), refresh contacts and try to find it
+              fetchContacts().then(updatedContacts => {
+                const newContact = updatedContacts?.find(c => c.id === message.chat_id);
+                if (newContact) setSelectedContact(newContact);
+              });
+            }
+          };
         }
       }
 

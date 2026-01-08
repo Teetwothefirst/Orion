@@ -28,6 +28,7 @@ app.use('/auth', authRoutes);
 app.use('/chats', chatRoutes);
 app.use('/users', usersRoutes);
 app.use('/support', supportRoutes);
+app.use('/keys', require('./routes/keys'));
 
 // Socket.io
 io.on('connection', (socket) => {

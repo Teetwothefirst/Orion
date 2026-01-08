@@ -1,0 +1,50 @@
+{
+    "packs": [
+        {
+            "id": "starter_pack",
+            "name": "Orion Starter",
+            "stickers": [
+                {
+                    "id": "s1",
+                    "url": "https://img.icons8.com/color/512/rocket.png",
+                    "name": "Rocket"
+                },
+                {
+                    "id": "s2",
+                    "url": "https://img.icons8.com/color/512/star.png",
+                    "name": "Star"
+                },
+                {
+                    "id": "s3",
+                    "url": "https://img.icons8.com/color/512/fire-element.png",
+                    "name": "Fire"
+                },
+                {
+                    "id": "s4",
+                    "url": "https://img.icons8.com/color/512/heart-side-view.png",
+                    "name": "Heart"
+                },
+                {
+                    "id": "s5",
+                    "url": "https://img.icons8.com/color/512/party-popper.png",
+                    "name": "Celebrate"
+                },
+                {
+                    "id": "s6",
+                    "url": "https://img.icons8.com/color/512/cool.png",
+                    "name": "Cool"
+                },
+                {
+                    "id": "s7",
+                    "url": "https://img.icons8.com/color/512/smiling-face-with-heart.png",
+                    "name": "Love"
+                },
+                {
+                    "id": "s8",
+                    "url": "https://img.icons8.com/color/512/money-box.png",
+                    "name": "Rich"
+                }
+            ]
+        }
+    ]
+}

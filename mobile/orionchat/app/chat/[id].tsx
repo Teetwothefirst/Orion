@@ -7,13 +7,13 @@ import { api, socket } from '@/services/api';
 import * as ImagePicker from 'expo-image-picker';
 import { Video, ResizeMode } from 'expo-av';
 import { Alert } from 'react-native';
-import GifPicker from '@/components/chat/GifPicker';
+import MediaPicker from '@/components/chat/MediaPicker';
 
 interface Message {
     id: number;
     content: string;
     sender_id: number;
-    type?: 'text' | 'image' | 'video' | 'document' | 'gif';
+    type?: 'text' | 'image' | 'video' | 'document' | 'gif' | 'sticker';
     media_url?: string;
     status?: 'sent' | 'delivered' | 'read';
     reply_to_id?: number;
@@ -40,7 +40,7 @@ export default function ChatRoomScreen() {
     const [showGroupInfo, setShowGroupInfo] = useState(false);
     const [participants, setParticipants] = useState<any[]>([]);
     const [myRole, setMyRole] = useState('member');
-    const [showGifPicker, setShowGifPicker] = useState(false);
+    const [showMediaPicker, setShowMediaPicker] = useState(false);
     const flatListRef = useRef<FlatList>(null);
     const { user } = useAuth();
     const router = useRouter();
@@ -320,6 +320,14 @@ export default function ChatRoomScreen() {
                         />
                     )}
 
+                    {item.type === 'sticker' && (
+                        <Image
+                            source={{ uri: item.media_url }}
+                            style={styles.stickerMessage}
+                            resizeMode="contain"
+                        />
+                    )}
+
                     {item.type === 'text' && (
                         <Text style={[styles.messageText, isMyMessage ? styles.myMessageText : styles.otherMessageText]}>
                             {item.content}
@@ -432,7 +440,7 @@ export default function ChatRoomScreen() {
                     />
                     <TouchableOpacity
                         style={styles.attachButton}
-                        onPress={() => setShowGifPicker(true)}
+                        onPress={() => setShowMediaPicker(true)}
                     >
                         <Ionicons name="happy-outline" size={24} color="#007AFF" />
                     </TouchableOpacity>
@@ -442,17 +450,17 @@ export default function ChatRoomScreen() {
                 </View>
 
                 <Modal
-                    visible={showGifPicker}
+                    visible={showMediaPicker}
                     animationType="slide"
-                    onRequestClose={() => setShowGifPicker(false)}
+                    onRequestClose={() => setShowMediaPicker(false)}
                 >
                     <SafeAreaView style={{ flex: 1, backgroundColor: '#1E1E1E' }}>
-                        <GifPicker
-                            onSelect={(url) => {
-                                sendMessage({ type: 'gif', content: 'Sent a GIF', media_url: url });
-                                setShowGifPicker(false);
+                        <MediaPicker
+                            onSelect={(url, type) => {
+                                sendMessage({ type: type, content: `Sent a ${type}`, media_url: url });
+                                setShowMediaPicker(false);
                             }}
-                            onClose={() => setShowGifPicker(false)}
+                            onClose={() => setShowMediaPicker(false)}
                         />
                     </SafeAreaView>
                 </Modal>
@@ -831,6 +839,11 @@ const styles = StyleSheet.create({
         width: 200,
         height: 150,
         borderRadius: 12,
+        marginBottom: 5,
+    },
+    stickerMessage: {
+        width: 120,
+        height: 120,
         marginBottom: 5,
     },
 });

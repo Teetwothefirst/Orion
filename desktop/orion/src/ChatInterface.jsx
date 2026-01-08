@@ -23,10 +23,12 @@ const ChatInterface = () => {
   const [profileForm, setProfileForm] = useState({ username: '', bio: '', avatar: null });
   const [availableUsers, setAvailableUsers] = useState([]);
   const [showNewChatModal, setShowNewChatModal] = useState(false);
-  const [showGifPicker, setShowGifPicker] = useState(false);
+  const [showMediaPicker, setShowMediaPicker] = useState(false);
+  const [mediaTab, setMediaTab] = useState('gif'); // 'gif' or 'sticker'
   const [gifSearch, setGifSearch] = useState('');
   const [gifs, setGifs] = useState([]);
-  const GIPHY_API_KEY = 'dc6zaTOxFJmzC'; // Public Beta Key (Rate limited, for production use own key)
+  const [stickerPacks, setStickerPacks] = useState([]);
+  const GIPHY_API_KEY = 'dc6zaTOxFJmzC';
   const [userSearchQuery, setUserSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState('chat');
   const [searchQuery, setSearchQuery] = useState('');
@@ -137,6 +139,7 @@ const ChatInterface = () => {
     if (user) {
       socket.emit('user_online', user.id);
       setProfileForm({ username: user.username, bio: user.bio || '', avatar: user.avatar });
+      fetchStickers();
     }
 
     return () => {
@@ -155,10 +158,19 @@ const ChatInterface = () => {
   }, [selectedContact]);
 
   useEffect(() => {
-    if (showGifPicker) {
+    if (showMediaPicker && mediaTab === 'gif') {
       fetchGifs();
     }
-  }, [showGifPicker, gifSearch]);
+  }, [showMediaPicker, mediaTab, gifSearch]);
+
+  const fetchStickers = async () => {
+    try {
+      const response = await api.get('/chats/stickers');
+      setStickerPacks(response.data.packs || []);
+    } catch (error) {
+      console.error('Error fetching stickers:', error);
+    }
+  };
 
   const fetchGifs = async () => {
     try {
@@ -180,8 +192,17 @@ const ChatInterface = () => {
       content: 'Sent a GIF',
       media_url: gifUrl
     });
-    setShowGifPicker(false);
+    setShowMediaPicker(false);
     setGifSearch('');
+  };
+
+  const handleSendSticker = (stickerUrl) => {
+    handleSendMessage({
+      type: 'sticker',
+      content: 'Sent a Sticker',
+      media_url: stickerUrl
+    });
+    setShowMediaPicker(false);
   };
 
   const handleGlobalSearch = async (query) => {
@@ -776,6 +797,10 @@ const ChatInterface = () => {
                       <img src={message.media_url} alt="GIF" style={styles.mediaGif} />
                     )}
 
+                    {message.type === 'sticker' && (
+                      <img src={message.media_url} alt="Sticker" style={styles.mediaSticker} />
+                    )}
+
                     {message.type === 'text' && (
                       <p style={styles.messageText}>{message.message}</p>
                     )}
@@ -854,39 +879,77 @@ const ChatInterface = () => {
                 />
                 <button
                   style={styles.attachButton}
-                  onClick={() => setShowGifPicker(!showGifPicker)}
+                  onClick={() => setShowMediaPicker(!showMediaPicker)}
                 >
-                  <Smile size={20} color={showGifPicker ? '#007AFF' : '#6b7280'} />
+                  <Smile size={20} color={showMediaPicker ? '#007AFF' : '#6b7280'} />
                 </button>
                 <button style={styles.sendButton} onClick={() => handleSendMessage()}>
                   <Send size={18} />
                 </button>
               </div>
 
-              {showGifPicker && (
-                <div style={styles.gifPickerContainer}>
-                  <div style={styles.gifPickerHeader}>
-                    <input
-                      type="text"
-                      placeholder="Search GIFs..."
-                      value={gifSearch}
-                      onChange={(e) => setGifSearch(e.target.value)}
-                      style={styles.gifSearchInput}
-                      autoFocus
-                    />
-                    <X size={18} style={{ cursor: 'pointer' }} onClick={() => setShowGifPicker(false)} />
+              {showMediaPicker && (
+                <div style={styles.mediaPickerContainer}>
+                  <div style={styles.mediaPickerTabs}>
+                    <button
+                      style={{ ...styles.mediaTab, borderBottom: mediaTab === 'gif' ? '2px solid #007AFF' : 'none', color: mediaTab === 'gif' ? '#007AFF' : '#6b7280' }}
+                      onClick={() => setMediaTab('gif')}
+                    >
+                      GIFs
+                    </button>
+                    <button
+                      style={{ ...styles.mediaTab, borderBottom: mediaTab === 'sticker' ? '2px solid #007AFF' : 'none', color: mediaTab === 'sticker' ? '#007AFF' : '#6b7280' }}
+                      onClick={() => setMediaTab('sticker')}
+                    >
+                      Stickers
+                    </button>
+                    <X size={18} style={{ cursor: 'pointer', marginLeft: 'auto' }} onClick={() => setShowMediaPicker(false)} />
                   </div>
-                  <div style={styles.gifGrid}>
-                    {gifs.map(gif => (
-                      <img
-                        key={gif.id}
-                        src={gif.images.fixed_height_small.url}
-                        alt="GIF"
-                        style={styles.gifThumb}
-                        onClick={() => handleSendGif(gif.images.original.url)}
-                      />
-                    ))}
-                  </div>
+
+                  {mediaTab === 'gif' ? (
+                    <>
+                      <div style={styles.mediaPickerHeader}>
+                        <input
+                          type="text"
+                          placeholder="Search GIFs..."
+                          value={gifSearch}
+                          onChange={(e) => setGifSearch(e.target.value)}
+                          style={styles.gifSearchInput}
+                          autoFocus
+                        />
+                      </div>
+                      <div style={styles.gifGrid}>
+                        {gifs.map(gif => (
+                          <img
+                            key={gif.id}
+                            src={gif.images.fixed_height_small.url}
+                            alt="GIF"
+                            style={styles.gifThumb}
+                            onClick={() => handleSendGif(gif.images.original.url)}
+                          />
+                        ))}
+                      </div>
+                    </>
+                  ) : (
+                    <div style={styles.stickerGrid}>
+                      {stickerPacks.map(pack => (
+                        <div key={pack.id}>
+                          <p style={styles.stickerPackName}>{pack.name}</p>
+                          <div style={styles.stickerList}>
+                            {pack.stickers.map(sticker => (
+                              <img
+                                key={sticker.id}
+                                src={sticker.url}
+                                alt={sticker.name}
+                                style={styles.stickerThumb}
+                                onClick={() => handleSendSticker(sticker.url)}
+                              />
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -2006,13 +2069,21 @@ const styles = {
     fontSize: '14px',
     padding: '8px'
   },
-  gifPickerContainer: {
+  gifSearchInput: {
+    flex: 1,
+    padding: '8px 12px',
+    borderRadius: '8px',
+    border: '1px solid #e5e7eb',
+    fontSize: '14px',
+    outline: 'none'
+  },
+  mediaPickerContainer: {
     position: 'absolute',
     bottom: '70px',
-    right: '25px',
-    width: '300px',
+    right: '20px',
+    width: '320px',
     height: '400px',
-    backgroundColor: 'white',
+    background: '#ffffff',
     borderRadius: '16px',
     boxShadow: '0 10px 25px rgba(0,0,0,0.1)',
     display: 'flex',
@@ -2021,20 +2092,61 @@ const styles = {
     zIndex: 1000,
     border: '1px solid #e5e7eb'
   },
-  gifPickerHeader: {
+  mediaPickerTabs: {
+    display: 'flex',
+    padding: '8px 16px',
+    borderBottom: '1px solid #f3f4f6',
+    alignItems: 'center',
+    gap: '16px'
+  },
+  mediaTab: {
+    background: 'none',
+    border: 'none',
+    padding: '4px 8px',
+    cursor: 'pointer',
+    fontSize: '14px',
+    fontWeight: '500',
+    transition: 'all 0.2s',
+    color: '#6b7280'
+  },
+  mediaPickerHeader: {
+    padding: '12px',
     display: 'flex',
     alignItems: 'center',
-    padding: '12px',
-    borderBottom: '1px solid #e5e7eb',
     gap: '8px'
   },
-  gifSearchInput: {
+  stickerGrid: {
     flex: 1,
-    padding: '8px 12px',
-    borderRadius: '8px',
-    border: '1px solid #e5e7eb',
-    fontSize: '14px',
-    outline: 'none'
+    overflowY: 'auto',
+    padding: '12px'
+  },
+  stickerPackName: {
+    fontSize: '11px',
+    color: '#9ba3af',
+    marginBottom: '8px',
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: '0.05em'
+  },
+  stickerList: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(3, 1fr)',
+    gap: '12px',
+    marginBottom: '16px'
+  },
+  stickerThumb: {
+    width: '100%',
+    aspectRatio: '1',
+    objectFit: 'contain',
+    cursor: 'pointer',
+    borderRadius: '4px',
+    transition: 'transform 0.2s',
+  },
+  mediaSticker: {
+    width: '120px',
+    height: '120px',
+    marginTop: '8px',
+    display: 'block'
   },
   gifGrid: {
     flex: 1,

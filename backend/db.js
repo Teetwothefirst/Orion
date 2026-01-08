@@ -138,6 +138,21 @@ const initDb = () => {
             token TEXT UNIQUE,
             platform TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )`,
+        `CREATE TABLE IF NOT EXISTS signal_identities (
+            user_id INTEGER PRIMARY KEY,
+            public_key TEXT,
+            registration_id INTEGER,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )`,
+        `CREATE TABLE IF NOT EXISTS signal_prekeys (
+            id ${isPostgres ? 'SERIAL PRIMARY KEY' : 'INTEGER PRIMARY KEY AUTOINCREMENT'},
+            user_id INTEGER,
+            key_id INTEGER,
+            public_key TEXT,
+            signature TEXT,
+            type TEXT, -- 'signed' or 'one-time'
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )`
     ];
 

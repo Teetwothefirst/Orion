@@ -4,6 +4,8 @@ const multer = require('multer');
 const cloudinary = require('../utils/cloudinary');
 const { CloudinaryStorage } = require('multer-storage-cloudinary');
 const crypto = require('crypto');
+const fs = require('fs');
+const path = require('path');
 
 const router = express.Router();
 
@@ -31,6 +33,18 @@ router.post('/upload', upload.single('file'), (req, res) => {
         type: req.file.mimetype.split('/')[0] === 'image' ? 'image' :
             req.file.mimetype.split('/')[0] === 'video' ? 'video' : 'document',
         name: req.file.originalname
+    });
+});
+
+// Get all sticker packs
+router.get('/stickers', (req, res) => {
+    const stickersPath = path.join(__dirname, '../data/stickers.json');
+    fs.readFile(stickersPath, 'utf8', (err, data) => {
+        if (err) {
+            console.error('Error reading stickers:', err);
+            return res.status(500).send("Error reading stickers.");
+        }
+        res.status(200).send(JSON.parse(data));
     });
 });
 

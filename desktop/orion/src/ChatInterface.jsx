@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Search, MoreHorizontal, Send, Home, MessageCircle, Users, Heart, Bell, Plus, X, Paperclip, Check, CheckCheck, Reply, Forward, FileText, Play } from 'lucide-react';
+import { Search, MoreHorizontal, Send, Home, MessageCircle, Users, Heart, Bell, Plus, X, Paperclip, Check, CheckCheck, Reply, Forward, FileText, Play, Sticker, Smile } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from './context/AuthContext.jsx';
 import { api, socket } from './services/api.js';
@@ -23,6 +23,10 @@ const ChatInterface = () => {
   const [profileForm, setProfileForm] = useState({ username: '', bio: '', avatar: null });
   const [availableUsers, setAvailableUsers] = useState([]);
   const [showNewChatModal, setShowNewChatModal] = useState(false);
+  const [showGifPicker, setShowGifPicker] = useState(false);
+  const [gifSearch, setGifSearch] = useState('');
+  const [gifs, setGifs] = useState([]);
+  const GIPHY_API_KEY = 'dc6zaTOxFJmzC'; // Public Beta Key (Rate limited, for production use own key)
   const [userSearchQuery, setUserSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState('chat');
   const [searchQuery, setSearchQuery] = useState('');
@@ -149,6 +153,36 @@ const ChatInterface = () => {
       socket.emit('join_room', selectedContact.id);
     }
   }, [selectedContact]);
+
+  useEffect(() => {
+    if (showGifPicker) {
+      fetchGifs();
+    }
+  }, [showGifPicker, gifSearch]);
+
+  const fetchGifs = async () => {
+    try {
+      const endpoint = gifSearch.trim()
+        ? `https://api.giphy.com/v1/gifs/search?api_key=${GIPHY_API_KEY}&q=${encodeURIComponent(gifSearch)}&limit=20`
+        : `https://api.giphy.com/v1/gifs/trending?api_key=${GIPHY_API_KEY}&limit=20`;
+
+      const response = await fetch(endpoint);
+      const data = await response.json();
+      setGifs(data.data || []);
+    } catch (error) {
+      console.error('Error fetching GIFs:', error);
+    }
+  };
+
+  const handleSendGif = (gifUrl) => {
+    handleSendMessage({
+      type: 'gif',
+      content: 'Sent a GIF',
+      media_url: gifUrl
+    });
+    setShowGifPicker(false);
+    setGifSearch('');
+  };
 
   const handleGlobalSearch = async (query) => {
     setSearchQuery(query);
@@ -738,6 +772,10 @@ const ChatInterface = () => {
                       </a>
                     )}
 
+                    {message.type === 'gif' && (
+                      <img src={message.media_url} alt="GIF" style={styles.mediaGif} />
+                    )}
+
                     {message.type === 'text' && (
                       <p style={styles.messageText}>{message.message}</p>
                     )}
@@ -814,10 +852,43 @@ const ChatInterface = () => {
                   placeholder="Type a message"
                   style={styles.input}
                 />
+                <button
+                  style={styles.attachButton}
+                  onClick={() => setShowGifPicker(!showGifPicker)}
+                >
+                  <Smile size={20} color={showGifPicker ? '#007AFF' : '#6b7280'} />
+                </button>
                 <button style={styles.sendButton} onClick={() => handleSendMessage()}>
                   <Send size={18} />
                 </button>
               </div>
+
+              {showGifPicker && (
+                <div style={styles.gifPickerContainer}>
+                  <div style={styles.gifPickerHeader}>
+                    <input
+                      type="text"
+                      placeholder="Search GIFs..."
+                      value={gifSearch}
+                      onChange={(e) => setGifSearch(e.target.value)}
+                      style={styles.gifSearchInput}
+                      autoFocus
+                    />
+                    <X size={18} style={{ cursor: 'pointer' }} onClick={() => setShowGifPicker(false)} />
+                  </div>
+                  <div style={styles.gifGrid}>
+                    {gifs.map(gif => (
+                      <img
+                        key={gif.id}
+                        src={gif.images.fixed_height_small.url}
+                        alt="GIF"
+                        style={styles.gifThumb}
+                        onClick={() => handleSendGif(gif.images.original.url)}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           </>
         ) : (
@@ -1706,14 +1777,22 @@ const styles = {
   },
   mediaImage: {
     maxWidth: '100%',
-    borderRadius: '8px',
-    marginBottom: '8px',
-    cursor: 'pointer'
+    maxHeight: '300px',
+    borderRadius: '12px',
+    marginTop: '4px'
+  },
+  mediaGif: {
+    maxWidth: '100%',
+    maxHeight: '250px',
+    borderRadius: '12px',
+    marginTop: '4px',
+    display: 'block'
   },
   mediaVideo: {
     maxWidth: '100%',
-    borderRadius: '8px',
-    marginBottom: '8px'
+    maxHeight: '300px',
+    borderRadius: '12px',
+    marginTop: '4px'
   },
   mediaDoc: {
     display: 'flex',
@@ -1918,6 +1997,60 @@ const styles = {
     display: 'flex',
     gap: '12px',
     width: '100%'
+  },
+  input: {
+    flex: 1,
+    border: 'none',
+    outline: 'none',
+    background: 'none',
+    fontSize: '14px',
+    padding: '8px'
+  },
+  gifPickerContainer: {
+    position: 'absolute',
+    bottom: '70px',
+    right: '25px',
+    width: '300px',
+    height: '400px',
+    backgroundColor: 'white',
+    borderRadius: '16px',
+    boxShadow: '0 10px 25px rgba(0,0,0,0.1)',
+    display: 'flex',
+    flexDirection: 'column',
+    overflow: 'hidden',
+    zIndex: 1000,
+    border: '1px solid #e5e7eb'
+  },
+  gifPickerHeader: {
+    display: 'flex',
+    alignItems: 'center',
+    padding: '12px',
+    borderBottom: '1px solid #e5e7eb',
+    gap: '8px'
+  },
+  gifSearchInput: {
+    flex: 1,
+    padding: '8px 12px',
+    borderRadius: '8px',
+    border: '1px solid #e5e7eb',
+    fontSize: '14px',
+    outline: 'none'
+  },
+  gifGrid: {
+    flex: 1,
+    display: 'grid',
+    gridTemplateColumns: '1fr 1fr',
+    gap: '8px',
+    padding: '12px',
+    overflowY: 'auto'
+  },
+  gifThumb: {
+    width: '100%',
+    height: '100px',
+    objectFit: 'cover',
+    borderRadius: '8px',
+    cursor: 'pointer',
+    transition: 'transform 0.2s'
   },
   profileButton: {
     flex: 1,

@@ -7,12 +7,13 @@ import { api, socket } from '@/services/api';
 import * as ImagePicker from 'expo-image-picker';
 import { Video, ResizeMode } from 'expo-av';
 import { Alert } from 'react-native';
+import GifPicker from '@/components/chat/GifPicker';
 
 interface Message {
     id: number;
     content: string;
     sender_id: number;
-    type?: 'text' | 'image' | 'video' | 'document';
+    type?: 'text' | 'image' | 'video' | 'document' | 'gif';
     media_url?: string;
     status?: 'sent' | 'delivered' | 'read';
     reply_to_id?: number;
@@ -39,6 +40,7 @@ export default function ChatRoomScreen() {
     const [showGroupInfo, setShowGroupInfo] = useState(false);
     const [participants, setParticipants] = useState<any[]>([]);
     const [myRole, setMyRole] = useState('member');
+    const [showGifPicker, setShowGifPicker] = useState(false);
     const flatListRef = useRef<FlatList>(null);
     const { user } = useAuth();
     const router = useRouter();
@@ -310,6 +312,14 @@ export default function ChatRoomScreen() {
                         </View>
                     )}
 
+                    {item.type === 'gif' && (
+                        <Image
+                            source={{ uri: item.media_url }}
+                            style={styles.gifMessage}
+                            resizeMode="contain"
+                        />
+                    )}
+
                     {item.type === 'text' && (
                         <Text style={[styles.messageText, isMyMessage ? styles.myMessageText : styles.otherMessageText]}>
                             {item.content}
@@ -420,10 +430,32 @@ export default function ChatRoomScreen() {
                         placeholderTextColor="#666"
                         multiline
                     />
-                    <TouchableOpacity onPress={() => sendMessage()} style={styles.sendButton}>
+                    <TouchableOpacity
+                        style={styles.attachButton}
+                        onPress={() => setShowGifPicker(true)}
+                    >
+                        <Ionicons name="happy-outline" size={24} color="#007AFF" />
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.sendButton} onPress={() => sendMessage()}>
                         <Ionicons name="send" size={24} color="#007AFF" />
                     </TouchableOpacity>
                 </View>
+
+                <Modal
+                    visible={showGifPicker}
+                    animationType="slide"
+                    onRequestClose={() => setShowGifPicker(false)}
+                >
+                    <SafeAreaView style={{ flex: 1, backgroundColor: '#1E1E1E' }}>
+                        <GifPicker
+                            onSelect={(url) => {
+                                sendMessage({ type: 'gif', content: 'Sent a GIF', media_url: url });
+                                setShowGifPicker(false);
+                            }}
+                            onClose={() => setShowGifPicker(false)}
+                        />
+                    </SafeAreaView>
+                </Modal>
             </KeyboardAvoidingView>
             {/* Bug Report Modal if needed? No, separate task */}
 
@@ -794,5 +826,11 @@ const styles = StyleSheet.create({
         height: 150,
         borderRadius: 12,
         marginBottom: 8,
+    },
+    gifMessage: {
+        width: 200,
+        height: 150,
+        borderRadius: 12,
+        marginBottom: 5,
     },
 });

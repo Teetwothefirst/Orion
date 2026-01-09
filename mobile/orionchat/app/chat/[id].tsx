@@ -129,6 +129,11 @@ export default function ChatRoomScreen() {
             }));
         });
 
+        socket.on('message_deleted', (data: { messageId: number, chatId: number }) => {
+            console.log('Message deleted:', data);
+            setMessages(prev => prev.filter(m => m.id !== data.messageId));
+        });
+
         socket.on('user_status', (data) => {
             setOnlineUsers(prev => ({
                 ...prev,
@@ -389,21 +394,58 @@ export default function ChatRoomScreen() {
         }
     };
 
+    const handleDeleteMessage = async (messageId: number) => {
+        Alert.alert(
+            'Delete Message',
+            'Are you sure you want to delete this message? This cannot be undone.',
+            [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                    text: 'Delete',
+                    style: 'destructive',
+                    onPress: async () => {
+                        try {
+                            await api.delete(`/chats/messages/${messageId}`, {
+                                data: { userId: user?.id }
+                            });
+                            // Message will be removed via socket event
+                        } catch (error) {
+                            console.error('Error deleting message:', error);
+                            Alert.alert('Error', 'Failed to delete message. You can only delete your own messages.');
+                        }
+                    }
+                }
+            ]
+        );
+    };
+
     const handleMessagePress = (item: Message) => {
+        const actions: any[] = [
+            {
+                text: 'React', onPress: () => {
+                    setSelectedMessageForReaction(item);
+                    setShowReactionPicker(true);
+                }
+            },
+            { text: 'Reply', onPress: () => setReplyTo(item) },
+            { text: 'Forward', onPress: () => handleForward(item) }
+        ];
+
+        // Add Delete option only for own messages
+        if (item.sender_id === user?.id) {
+            actions.push({
+                text: 'Delete',
+                onPress: () => handleDeleteMessage(item.id),
+                style: 'destructive'
+            });
+        }
+
+        actions.push({ text: 'Cancel', style: 'cancel' });
+
         Alert.alert(
             'Message Actions',
             'Select an action',
-            [
-                {
-                    text: 'React', onPress: () => {
-                        setSelectedMessageForReaction(item);
-                        setShowReactionPicker(true);
-                    }
-                },
-                { text: 'Reply', onPress: () => setReplyTo(item) },
-                { text: 'Forward', onPress: () => handleForward(item) },
-                { text: 'Cancel', style: 'cancel' }
-            ]
+            actions
         );
     };
 

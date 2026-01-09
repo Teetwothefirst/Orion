@@ -265,6 +265,34 @@ router.post('/messages/:messageId/react', (req, res) => {
     });
 });
 
+// Delete message
+router.delete('/messages/:messageId', (req, res) => {
+    const messageId = req.params.messageId;
+    const { userId } = req.body;
+
+    // First, verify the user owns this message
+    db.get(`SELECT chat_id, sender_id FROM messages WHERE id = ?`, [messageId], (err, message) => {
+        if (err) return res.status(500).send("Error checking message ownership.");
+        if (!message) return res.status(404).send("Message not found.");
+        if (message.sender_id !== userId) return res.status(403).send("You can only delete your own messages.");
+
+        // Delete the message
+        db.run(`DELETE FROM messages WHERE id = ?`, [messageId], (err) => {
+            if (err) return res.status(500).send("Error deleting message.");
+
+            // Emit socket event to chat room
+            if (req.io) {
+                req.io.to(message.chat_id.toString()).emit('message_deleted', {
+                    messageId: parseInt(messageId),
+                    chatId: message.chat_id
+                });
+            }
+
+            res.status(200).send({ success: true, messageId });
+        });
+    });
+});
+
 // Global Search: Messages, existing chats, and potentially new users
 router.get('/search', (req, res) => {
     const { q, userId } = req.query;

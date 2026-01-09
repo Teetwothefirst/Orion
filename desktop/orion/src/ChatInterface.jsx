@@ -165,6 +165,11 @@ const ChatInterface = () => {
       }));
     });
 
+    socket.on('message_deleted', (data) => {
+      console.log('Message deleted:', data);
+      setMessages(prev => prev.filter(m => m.id !== data.messageId));
+    });
+
     socket.on('chat_read', (data) => {
       if (selectedContact && data.chatId === selectedContact.id) {
         setMessages(prev => prev.map(m => m.isOwn ? { ...m, status: 'read' } : m));
@@ -492,6 +497,22 @@ const ChatInterface = () => {
       console.log('Reaction sent successfully');
     } catch (error) {
       console.error('Error toggling reaction:', error);
+    }
+  };
+
+  const handleDeleteMessage = async (messageId) => {
+    if (!window.confirm('Are you sure you want to delete this message? This cannot be undone.')) {
+      return;
+    }
+
+    try {
+      await api.delete(`/chats/messages/${messageId}`, {
+        data: { userId: user.id }
+      });
+      // Message will be removed via socket event
+    } catch (error) {
+      console.error('Error deleting message:', error);
+      alert('Failed to delete message. You can only delete your own messages.');
     }
   };
 
@@ -1013,27 +1034,40 @@ const ChatInterface = () => {
                               <Forward size={14} style={{ marginRight: '8px' }} />
                               Forward
                             </div>
-                          </div>
-                        )}
-                        {/* Reaction Picker Popup */}
-                        {activeReactionMessageId === message.id && (
-                          <div style={styles.reactionPickerPopup} onClick={(e) => e.stopPropagation()}>
-                            {['❤️', '👍', '😂', '😮', '😢', '😡'].map(emoji => (
-                              <span
-                                key={emoji}
-                                style={styles.reactionPickerItem}
+                            {message.isOwn && (
+                              <div
+                                style={{ ...styles.dropdownItem, color: '#ef4444' }}
                                 onClick={() => {
-                                  handleReaction(message.id, emoji);
-                                  setActiveReactionMessageId(null);
+                                  handleDeleteMessage(message.id);
+                                  setActiveMessageMenu(null);
                                 }}
                               >
-                                {emoji}
-                              </span>
-                            ))}
+                                <X size={14} style={{ marginRight: '8px' }} />
+                                Delete
+                              </div>
+                            )}
                           </div>
                         )}
                       </div>
                     </div>
+
+                    {/* Reaction Picker Popup - Outside messageActions */}
+                    {activeReactionMessageId === message.id && (
+                      <div style={styles.reactionPickerPopup} onClick={(e) => e.stopPropagation()}>
+                        {['❤️', '👍', '😂', '😮', '😢', '😡'].map(emoji => (
+                          <span
+                            key={emoji}
+                            style={styles.reactionPickerItem}
+                            onClick={() => {
+                              handleReaction(message.id, emoji);
+                              setActiveReactionMessageId(null);
+                            }}
+                          >
+                            {emoji}
+                          </span>
+                        ))}
+                      </div>
+                    )}
                   </div>
                   {
                     message.isOwn && (

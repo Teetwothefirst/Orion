@@ -87,11 +87,25 @@ const sendBugReportEmail = async (data) => {
     };
 
     try {
+        if (!process.env.SMTP_USER || !process.env.SMTP_PASS) {
+            console.log('--- OFFLINE BUG REPORT START ---');
+            console.log(`Type: ${type}`);
+            console.log(`User: ${user}`);
+            console.log(`Description: ${description}`);
+            console.log(`Device Info: ${JSON.stringify(deviceInfo)}`);
+            if (isCrash) console.log(`Stack Trace: ${stackTrace}`);
+            console.log('--- OFFLINE BUG REPORT END ---');
+            return { success: true, warning: 'SMTP not configured, report logged to console' };
+        }
+
         await transporter.sendMail(mailOptions);
         console.log(`${type} sent to ${recipient}`);
         return { success: true };
     } catch (error) {
         console.error(`Error sending ${type.toLowerCase()}:`, error);
+        // Even if email fails, log it to console so it's not lost
+        console.log('--- FAILED EMAIL BUG REPORT FALLBACK ---');
+        console.log(JSON.stringify(mailOptions, null, 2));
         return { success: false, error: error.message };
     }
 };

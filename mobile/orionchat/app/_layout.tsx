@@ -106,9 +106,9 @@ export default function RootLayout() {
           <Stack>
             <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
             <Stack.Screen name="login" options={{ headerShown: false }} />
-            <Stack.Screen name="settings" options={{ headerShown: false }} />
-            <Stack.Screen name="general" options={{ headerShown: false }} />
-            <Stack.Screen name="account" options={{ headerShown: false }} />
+            <Stack.Screen name="settings" options={{ presentation: 'card', title: 'Settings' }} />
+            <Stack.Screen name="general" options={{ presentation: 'card', title: 'General Settings' }} />
+            <Stack.Screen name="account" options={{ presentation: 'card', title: 'Account Settings' }} />
             <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
           </Stack>
           <StatusBar style="auto" />

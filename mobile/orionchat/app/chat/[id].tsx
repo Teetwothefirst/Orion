@@ -8,12 +8,13 @@ import * as ImagePicker from 'expo-image-picker';
 import { Video, ResizeMode } from 'expo-av';
 import { Alert } from 'react-native';
 import MediaPicker from '@/components/chat/MediaPicker';
+import { encryptionService } from '@/services/EncryptionService';
 
 interface Message {
     id: number;
     content: string;
     sender_id: number;
-    type?: 'text' | 'image' | 'video' | 'document' | 'gif' | 'sticker';
+    type?: 'text' | 'image' | 'video' | 'document' | 'gif' | 'sticker' | 'encrypted';
     media_url?: string;
     status?: 'sent' | 'delivered' | 'read';
     reply_to_id?: number;
@@ -55,11 +56,27 @@ export default function ChatRoomScreen() {
         socket.emit('join_room', id);
 
         // Listen for new messages
-        socket.on('receive_message', (message: Message) => {
+        socket.on('receive_message', async (message: Message) => {
+            let displayContent = message.content;
+            if (message.type === 'encrypted') {
+                try {
+                    const encryptedData = JSON.parse(message.content);
+                    displayContent = await encryptionService.decryptMessage(message.sender_id, encryptedData);
+                } catch (err) {
+                    console.error('Mobile Decryption failed:', err);
+                    displayContent = '[Decryption Failed]';
+                }
+            }
+
             if (message.sender_id !== user.id) {
                 socket.emit('message_read', { chatId: id, userId: user.id });
             }
-            setMessages((prev) => [...prev, message]);
+
+            setMessages((prev) => [...prev, {
+                ...message,
+                content: displayContent,
+                type: message.type === 'encrypted' ? 'text' : message.type
+            }]);
             scrollToBottom();
         });
 
@@ -82,6 +99,10 @@ export default function ChatRoomScreen() {
 
         // Mark current chat as read when focused
         socket.emit('message_read', { chatId: id, userId: user.id });
+
+        if (user) {
+            encryptionService.initialize(user.id).catch(err => console.error('Signal Init Error:', err));
+        }
 
         return () => {
             socket.off('receive_message');
@@ -148,7 +169,27 @@ export default function ChatRoomScreen() {
     const fetchMessages = async () => {
         try {
             const response = await api.get(`/chats/${id}/messages`);
-            setMessages(response.data);
+            const decryptedMessages = await Promise.all(response.data.map(async (m: any) => {
+                if (m.type === 'encrypted') {
+                    try {
+                        const encryptedData = JSON.parse(m.content);
+                        const senderId = m.sender_id;
+                        // For historical messages, the "other" user is the one we establishment session with
+                        const targetUserId = senderId === user?.id ? chatInfo?.other_user_id : senderId;
+
+                        if (targetUserId) {
+                            const decrypted = await encryptionService.decryptMessage(targetUserId, encryptedData);
+                            return { ...m, content: decrypted, type: 'text' as const };
+                        }
+                    } catch (err) {
+                        console.error('Mobile Decryption failed for historical message:', err);
+                        return { ...m, content: '[Encrypted]' };
+                    }
+                }
+                return m;
+            }));
+
+            setMessages(decryptedMessages);
             setLoading(false);
             scrollToBottom();
         } catch (error) {
@@ -157,14 +198,28 @@ export default function ChatRoomScreen() {
         }
     };
 
-    const sendMessage = (overrideData = {}) => {
+    const sendMessage = async (overrideData: any = {}) => {
         if ((newMessage.trim() === '' && !overrideData.hasOwnProperty('media_url')) || !user) return;
+
+        let content = newMessage;
+        let type = overrideData.type || 'text';
+
+        // E2EE for private chats
+        if (chatInfo?.type === 'private' && type === 'text' && !overrideData.media_url) {
+            try {
+                const encrypted = await encryptionService.encryptMessage(chatInfo.other_user_id, content);
+                content = JSON.stringify(encrypted);
+                type = 'encrypted';
+            } catch (err) {
+                console.error('Mobile Encryption failed:', err);
+            }
+        }
 
         const messageData: any = {
             chatId: id,
             senderId: user.id,
-            content: newMessage,
-            type: 'text',
+            content: content,
+            type: type,
             ...overrideData
         };
 

@@ -93,15 +93,7 @@ export default function AccountScreen() {
 
     return (
         <SafeAreaView style={styles.container}>
-            {/* Header */}
-            <View style={styles.header}>
-                <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-                    <Ionicons name="chevron-back" size={28} color="#007AFF" />
-                    <Text style={styles.backText}>Back</Text>
-                </TouchableOpacity>
-                <Text style={styles.headerTitle}>Account</Text>
-                <View style={styles.placeholder} />
-            </View>
+            <View style={styles.placeholder} />
 
             {/* Content */}
             <ScrollView style={styles.content}>

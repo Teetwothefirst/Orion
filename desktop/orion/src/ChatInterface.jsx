@@ -4,6 +4,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from './context/AuthContext.jsx';
 import { api, socket } from './services/api.js';
 import BugReportModal from './components/BugReportModal.jsx';
+import { encryptionService } from './utils/EncryptionService';
 
 const ChatInterface = () => {
   const [selectedContact, setSelectedContact] = useState(null);
@@ -59,13 +60,24 @@ const ChatInterface = () => {
     }
     fetchContacts();
 
-    socket.on('receive_message', (message) => {
+    socket.on('receive_message', async (message) => {
+      let displayContent = message.content;
+      if (message.type === 'encrypted') {
+        try {
+          const encryptedData = JSON.parse(message.content);
+          displayContent = await encryptionService.decryptMessage(message.sender_id, encryptedData);
+        } catch (err) {
+          console.error('Decryption failed:', err);
+          displayContent = '[Decryption Failed]';
+        }
+      }
+
       if (selectedContact && message.chat_id === selectedContact.id) {
         setMessages((prev) => [...prev, {
           id: message.id,
           sender: message.username,
-          message: message.content,
-          type: message.type,
+          message: displayContent,
+          type: message.type === 'encrypted' ? 'text' : message.type,
           media_url: message.media_url,
           status: message.status,
           reply_to_id: message.reply_to_id,
@@ -89,19 +101,16 @@ const ChatInterface = () => {
       if (message.sender_id !== user.id && !document.hasFocus()) {
         if ("Notification" in window && Notification.permission === "granted") {
           const notification = new Notification(message.username, {
-            body: message.type === 'text' ? message.content : `Sent a ${message.type}`,
+            body: message.type === 'encrypted' || message.type === 'text' ? displayContent : `Sent a ${message.type}`,
             icon: message.avatar || '👤'
           });
 
           notification.onclick = () => {
             window.focus();
-            // We use the chatId from the message to find the chat in the contacts list
-            // Note: contacts is available in the component scope
             const contact = contacts.find(c => c.id === message.chat_id);
             if (contact) {
               setSelectedContact(contact);
             } else {
-              // If not found (maybe first message), refresh contacts and try to find it
               fetchContacts().then(updatedContacts => {
                 const newContact = updatedContacts?.find(c => c.id === message.chat_id);
                 if (newContact) setSelectedContact(newContact);
@@ -140,6 +149,7 @@ const ChatInterface = () => {
       socket.emit('user_online', user.id);
       setProfileForm({ username: user.username, bio: user.bio || '', avatar: user.avatar });
       fetchStickers();
+      encryptionService.initialize(user.id).catch(err => console.error('Signal Init Error:', err));
     }
 
     return () => {
@@ -307,21 +317,47 @@ const ChatInterface = () => {
         isOwn: msg.sender_id === user.id,
         avatar: msg.avatar
       }));
-      setMessages(formattedMessages);
+      setMessages(await Promise.all(formattedMessages.map(async (m) => {
+        if (m.type === 'encrypted') {
+          try {
+            const encryptedData = JSON.parse(m.message);
+            const decrypted = await encryptionService.decryptMessage(m.sender_id === user.id ? selectedContact.other_user_id : m.sender_id, encryptedData);
+            return { ...m, message: decrypted, type: 'text' };
+          } catch (err) {
+            console.error('Decryption failed for historical message:', err);
+            return { ...m, message: '[Encrypted]' };
+          }
+        }
+        return m;
+      })));
       scrollToBottom();
     } catch (error) {
       console.error('Error fetching messages:', error);
     }
   };
 
-  const handleSendMessage = (overrideData = {}) => {
+  const handleSendMessage = async (overrideData = {}) => {
     if ((!messageInput.trim() && !overrideData.media_url) || !selectedContact) return;
+
+    let content = messageInput;
+    let type = overrideData.type || 'text';
+
+    // E2EE for private chats
+    if (selectedContact.type === 'private' && type === 'text' && !overrideData.media_url) {
+      try {
+        const encrypted = await encryptionService.encryptMessage(selectedContact.other_user_id, content);
+        content = JSON.stringify(encrypted);
+        type = 'encrypted';
+      } catch (err) {
+        console.error('Encryption failed:', err);
+      }
+    }
 
     const messageData = {
       chatId: selectedContact.id,
       senderId: user.id,
-      content: messageInput,
-      type: 'text',
+      content: content,
+      type: type,
       ...overrideData
     };
 

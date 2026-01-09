@@ -44,15 +44,7 @@ export default function GeneralScreen() {
 
     return (
         <SafeAreaView style={styles.container}>
-            {/* Header */}
-            <View style={styles.header}>
-                <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-                    <Ionicons name="chevron-back" size={28} color="#007AFF" />
-                    <Text style={styles.backText}>Back</Text>
-                </TouchableOpacity>
-                <Text style={styles.headerTitle}>General</Text>
-                <View style={styles.placeholder} />
-            </View>
+            <View style={styles.placeholder} />
 
             {/* Content */}
             <View style={styles.content}>

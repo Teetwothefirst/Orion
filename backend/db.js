@@ -175,23 +175,38 @@ const initDb = () => {
         db.query("ALTER TABLE chat_participants ADD COLUMN IF NOT EXISTS role TEXT DEFAULT 'member'").catch(() => { });
     } else {
         db.serialize(() => {
-            queries.forEach(q => db.run(q));
-            // Migration for existing databases
-            db.run("ALTER TABLE users ADD COLUMN reset_token TEXT", (err) => { /* ignore */ });
-            db.run("ALTER TABLE users ADD COLUMN reset_token_expiry INTEGER", (err) => { /* ignore */ });
-            db.run("ALTER TABLE users ADD COLUMN bio TEXT", (err) => { /* ignore */ });
-            db.run("ALTER TABLE users ADD COLUMN last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP", (err) => { /* ignore */ });
-            // Messaging Phase 2 migrations
-            db.run("ALTER TABLE messages ADD COLUMN type TEXT DEFAULT 'text'", (err) => { /* ignore */ });
-            db.run("ALTER TABLE messages ADD COLUMN media_url TEXT", (err) => { /* ignore */ });
-            db.run("ALTER TABLE messages ADD COLUMN status TEXT DEFAULT 'sent'", (err) => { /* ignore */ });
-            db.run("ALTER TABLE messages ADD COLUMN reply_to_id INTEGER", (err) => { /* ignore */ });
-            db.run("ALTER TABLE messages ADD COLUMN forwarded_from_id INTEGER", (err) => { /* ignore */ });
+            queries.forEach((q, index) => {
+                db.run(q, (err) => {
+                    if (err && !err.message.includes('already exists') && !err.message.includes('duplicate column name')) {
+                        console.error(`SQLite Init Error (query ${index}):`, err.message);
+                    }
+                });
+            });
 
-            // Phase 4 migrations
-            db.run("ALTER TABLE chats ADD COLUMN creator_id INTEGER", (err) => { /* ignore */ });
-            db.run("ALTER TABLE chats ADD COLUMN invite_code TEXT UNIQUE", (err) => { /* ignore */ });
-            db.run("ALTER TABLE chat_participants ADD COLUMN role TEXT DEFAULT 'member'", (err) => { /* ignore */ });
+            // Sequential migrations
+            const migrations = [
+                "ALTER TABLE users ADD COLUMN reset_token TEXT",
+                "ALTER TABLE users ADD COLUMN reset_token_expiry INTEGER",
+                "ALTER TABLE users ADD COLUMN bio TEXT",
+                "ALTER TABLE users ADD COLUMN last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP",
+                "ALTER TABLE messages ADD COLUMN type TEXT DEFAULT 'text'",
+                "ALTER TABLE messages ADD COLUMN media_url TEXT",
+                "ALTER TABLE messages ADD COLUMN status TEXT DEFAULT 'sent'",
+                "ALTER TABLE messages ADD COLUMN reply_to_id INTEGER",
+                "ALTER TABLE messages ADD COLUMN forwarded_from_id INTEGER",
+                "ALTER TABLE chats ADD COLUMN creator_id INTEGER",
+                "ALTER TABLE chats ADD COLUMN invite_code TEXT UNIQUE",
+                "ALTER TABLE chat_participants ADD COLUMN role TEXT DEFAULT 'member'"
+            ];
+
+            migrations.forEach(m => {
+                db.run(m, (err) => {
+                    // Ignore "already exists" errors for columns
+                    if (err && !err.message.includes('duplicate column name') && !err.message.includes('already exists')) {
+                        console.error("Migration Error:", err.message, "Query:", m);
+                    }
+                });
+            });
         });
     }
 };

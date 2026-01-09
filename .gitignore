@@ -2,3 +2,4 @@ node_modules
 process.md
 .env
 data.json
+*.db

@@ -153,6 +153,14 @@ const initDb = () => {
             signature TEXT,
             type TEXT, -- 'signed' or 'one-time'
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )`,
+        `CREATE TABLE IF NOT EXISTS message_reactions (
+            id ${isPostgres ? 'SERIAL PRIMARY KEY' : 'INTEGER PRIMARY KEY AUTOINCREMENT'},
+            message_id INTEGER,
+            user_id INTEGER,
+            emoji TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(message_id, user_id, emoji)
         )`
     ];
 

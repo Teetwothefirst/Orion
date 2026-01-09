@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, FlatList, SafeAreaView, KeyboardAvoidingView, Platform, Image, ActivityIndicator, Modal, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, FlatList, SafeAreaView, KeyboardAvoidingView, Platform, Image, ActivityIndicator, Modal, ScrollView, Animated } from 'react-native';
+import { Swipeable, RectButton } from 'react-native-gesture-handler';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '@/context/AuthContext';
@@ -24,7 +25,10 @@ interface Message {
     created_at: string;
     username: string;
     avatar: string;
+    reactions?: { emoji: string; count: number; user_ids: number[] }[];
 }
+
+const REACTION_EMOJIS = ['❤️', '👍', '😂', '😮', '😢', '😡'];
 
 export default function ChatRoomScreen() {
     const { id } = useLocalSearchParams();
@@ -45,6 +49,8 @@ export default function ChatRoomScreen() {
     const [showAddMember, setShowAddMember] = useState(false);
     const [userSearchQuery, setUserSearchQuery] = useState('');
     const [potentialMembers, setPotentialMembers] = useState<any[]>([]);
+    const [showReactionPicker, setShowReactionPicker] = useState(false);
+    const [selectedMessageForReaction, setSelectedMessageForReaction] = useState<Message | null>(null);
     const flatListRef = useRef<FlatList>(null);
     const { user } = useAuth();
     const router = useRouter();
@@ -91,6 +97,36 @@ export default function ChatRoomScreen() {
             if (data.chatId === id) {
                 setMessages(prev => prev.map(m => m.sender_id === user.id ? { ...m, status: 'read' } : m));
             }
+        });
+
+        socket.on('reaction_update', (data: any) => {
+            setMessages(prev => prev.map(m => {
+                if (m.id === data.messageId) {
+                    const currentReactions = m.reactions || [];
+                    let newReactions;
+
+                    if (data.action === 'added') {
+                        const existingGroup = currentReactions.find(r => r.emoji === data.emoji);
+                        if (existingGroup) {
+                            newReactions = currentReactions.map(r => r.emoji === data.emoji ? {
+                                ...r,
+                                count: r.count + 1,
+                                user_ids: [...r.user_ids, data.userId]
+                            } : r);
+                        } else {
+                            newReactions = [...currentReactions, { emoji: data.emoji, count: 1, user_ids: [data.userId] }];
+                        }
+                    } else {
+                        newReactions = currentReactions.map(r => r.emoji === data.emoji ? {
+                            ...r,
+                            count: r.count - 1,
+                            user_ids: r.user_ids.filter(id => id !== data.userId)
+                        } : r).filter(r => r.count > 0);
+                    }
+                    return { ...m, reactions: newReactions };
+                }
+                return m;
+            }));
         });
 
         socket.on('user_status', (data) => {
@@ -340,11 +376,30 @@ export default function ChatRoomScreen() {
         router.replace(`/chat/${chatId}` as any);
     };
 
+    const handleReaction = async (messageId: number, emoji: string) => {
+        try {
+            await api.post(`/chats/messages/${messageId}/react`, {
+                userId: user?.id,
+                emoji
+            });
+            setShowReactionPicker(false);
+            setSelectedMessageForReaction(null);
+        } catch (error) {
+            console.error('Error toggling reaction:', error);
+        }
+    };
+
     const handleMessagePress = (item: Message) => {
         Alert.alert(
             'Message Actions',
             'Select an action',
             [
+                {
+                    text: 'React', onPress: () => {
+                        setSelectedMessageForReaction(item);
+                        setShowReactionPicker(true);
+                    }
+                },
                 { text: 'Reply', onPress: () => setReplyTo(item) },
                 { text: 'Forward', onPress: () => handleForward(item) },
                 { text: 'Cancel', style: 'cancel' }
@@ -352,90 +407,157 @@ export default function ChatRoomScreen() {
         );
     };
 
-    const renderMessage = ({ item }: { item: Message }) => {
-        const isMyMessage = item.sender_id === user?.id;
+
+
+    const renderReplyAction = (progress: Animated.AnimatedInterpolation<number>, dragX: Animated.AnimatedInterpolation<number>, item: Message) => {
+        const trans = dragX.interpolate({
+            inputRange: [0, 50, 100],
+            outputRange: [0, 0, 0], // Keeps icon in place or moves it slightly
+        });
+
+        // Only allow replying to others' messages via Swipe (or yours too, Telegram allows both)
+        // Telegram allows replying to anyone.
 
         return (
-            <View style={[styles.messageContainer, isMyMessage ? styles.myMessageContainer : styles.otherMessageContainer]}>
-                {!isMyMessage && (
-                    <Image source={{ uri: item.avatar || 'https://i.pravatar.cc/100' }} style={styles.avatar} />
-                )}
-                <TouchableOpacity
-                    activeOpacity={0.8}
-                    onLongPress={() => handleMessagePress(item)}
-                    style={[styles.messageBubble, isMyMessage ? styles.myMessageBubble : styles.otherMessageBubble]}
-                >
-                    {!isMyMessage && <Text style={styles.senderName}>{item.username}</Text>}
+            <RectButton
+                style={styles.replyAction}
+                onPress={() => {
+                    // This is usually triggered by the swipe release in Swipeable but we can also tap it
+                    // Actually Swipeable triggers automatically if configured, or we just rely on the swipe open
+                    // Usually for swipe-to-reply we want it to trigger and bounce back.
+                    // For now, let's just make the action visible.
+                    // To auto-trigger, we use onSwipeableOpen in standard Swipeable
+                }}>
+                <Ionicons name="arrow-undo" size={24} color="white" style={{ marginLeft: 10 }} />
+            </RectButton>
+        );
+    };
 
-                    {item.reply_to_id && (
-                        <View style={styles.replyContext}>
-                            <Text style={styles.replySender}>{item.reply_sender_id === user?.id ? 'You' : 'Reply'}</Text>
-                            <Text style={styles.replySnippet} numberOfLines={1}>{item.reply_content}</Text>
-                        </View>
+    const renderMessage = ({ item }: { item: Message }) => {
+        const isMyMessage = item.sender_id === user?.id;
+        let swipeableRow: Swipeable | null = null;
+
+        const close = () => {
+            swipeableRow?.close();
+        };
+
+        const onSwipeableOpen = (direction: 'left' | 'right') => {
+            if (direction === 'left') {
+                setReplyTo(item);
+                close();
+            }
+        };
+
+        return (
+            <Swipeable
+                ref={ref => { swipeableRow = ref; }}
+                friction={2}
+                leftThreshold={30}
+                // renderLeftActions implies swiping from left to right (Telegram style)
+                renderLeftActions={(progress, dragX) => renderReplyAction(progress, dragX, item)}
+                onSwipeableOpen={onSwipeableOpen}
+            >
+                <View style={[styles.messageContainer, isMyMessage ? styles.myMessageContainer : styles.otherMessageContainer]}>
+                    {!isMyMessage && (
+                        <Image source={{ uri: item.avatar || 'https://i.pravatar.cc/100' }} style={styles.avatar} />
                     )}
+                    <TouchableOpacity
+                        activeOpacity={0.8}
+                        onLongPress={() => handleMessagePress(item)}
+                        style={[styles.messageBubble, isMyMessage ? styles.myMessageBubble : styles.otherMessageBubble]}
+                    >
+                        {!isMyMessage && <Text style={styles.senderName}>{item.username}</Text>}
 
-                    {item.type === 'image' && (
-                        <Image source={{ uri: item.media_url }} style={styles.mediaImage} resizeMode="cover" />
-                    )}
+                        {item.reply_to_id && (
+                            <View style={styles.replyContext}>
+                                <Text style={styles.replySender}>{item.reply_sender_id === user?.id ? 'You' : 'Reply'}</Text>
+                                <Text style={styles.replySnippet} numberOfLines={1}>{item.reply_content}</Text>
+                            </View>
+                        )}
 
-                    {item.type === 'video' && (
-                        <Video
-                            source={{ uri: item.media_url || '' }}
-                            rate={1.0}
-                            volume={1.0}
-                            isMuted={false}
-                            resizeMode={ResizeMode.COVER}
-                            shouldPlay={false}
-                            isLooping
-                            useNativeControls
-                            style={styles.mediaVideo}
-                        />
-                    )}
+                        {item.type === 'image' && (
+                            <Image source={{ uri: item.media_url }} style={styles.mediaImage} resizeMode="cover" />
+                        )}
 
-                    {item.type === 'document' && (
-                        <View style={styles.mediaPlaceholder}>
-                            <Ionicons name="document" size={40} color="white" />
-                            <Text style={{ color: 'white', marginTop: 4 }} numberOfLines={1}>{item.content}</Text>
-                        </View>
-                    )}
-
-                    {item.type === 'gif' && (
-                        <Image
-                            source={{ uri: item.media_url }}
-                            style={styles.gifMessage}
-                            resizeMode="contain"
-                        />
-                    )}
-
-                    {item.type === 'sticker' && (
-                        <Image
-                            source={{ uri: item.media_url }}
-                            style={styles.stickerMessage}
-                            resizeMode="contain"
-                        />
-                    )}
-
-                    {item.type === 'text' && (
-                        <Text style={[styles.messageText, isMyMessage ? styles.myMessageText : styles.otherMessageText]}>
-                            {item.content}
-                        </Text>
-                    )}
-
-                    <View style={styles.messageFooter}>
-                        <Text style={styles.timestamp}>
-                            {new Date(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                        </Text>
-                        {isMyMessage && (
-                            <Ionicons
-                                name={item.status === 'read' ? "checkmark-done" : item.status === 'delivered' ? "checkmark-done" : "checkmark"}
-                                size={14}
-                                color={item.status === 'read' ? "#4FC3F7" : "rgba(255,255,255,0.6)"}
-                                style={{ marginLeft: 4 }}
+                        {item.type === 'video' && (
+                            <Video
+                                source={{ uri: item.media_url || '' }}
+                                rate={1.0}
+                                volume={1.0}
+                                isMuted={false}
+                                resizeMode={ResizeMode.COVER}
+                                shouldPlay={false}
+                                isLooping
+                                useNativeControls
+                                style={styles.mediaVideo}
                             />
                         )}
-                    </View>
-                </TouchableOpacity>
-            </View>
+
+                        {item.type === 'document' && (
+                            <View style={styles.mediaPlaceholder}>
+                                <Ionicons name="document" size={40} color="white" />
+                                <Text style={{ color: 'white', marginTop: 4 }} numberOfLines={1}>{item.content}</Text>
+                            </View>
+                        )}
+
+                        {item.type === 'gif' && (
+                            <Image
+                                source={{ uri: item.media_url }}
+                                style={styles.gifMessage}
+                                resizeMode="contain"
+                            />
+                        )}
+
+                        {item.type === 'sticker' && (
+                            <Image
+                                source={{ uri: item.media_url }}
+                                style={styles.stickerMessage}
+                                resizeMode="contain"
+                            />
+                        )}
+
+                        {item.type === 'text' && (
+                            <Text style={[styles.messageText, isMyMessage ? styles.myMessageText : styles.otherMessageText]}>
+                                {item.content}
+                            </Text>
+                        )}
+
+                        <View style={styles.messageFooter}>
+                            <Text style={styles.timestamp}>
+                                {new Date(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            </Text>
+                            {isMyMessage && (
+                                <Ionicons
+                                    name={item.status === 'read' ? "checkmark-done" : item.status === 'delivered' ? "checkmark-done" : "checkmark"}
+                                    size={14}
+                                    color={item.status === 'read' ? "#4FC3F7" : "rgba(255,255,255,0.6)"}
+                                    style={{ marginLeft: 4 }}
+                                />
+                            )}
+                            {item.reactions && item.reactions.length > 0 && (
+                                <View style={styles.reactionsContainer}>
+                                    {item.reactions.map((r, idx) => (
+                                        <TouchableOpacity
+                                            key={idx}
+                                            style={[
+                                                styles.reactionChip,
+                                                r.user_ids.includes(user?.id || -1) && styles.reactionChipActive
+                                            ]}
+                                            onPress={() => handleReaction(item.id, r.emoji)}
+                                        >
+                                            <Text style={styles.reactionEmoji}>{r.emoji}</Text>
+                                            <Text style={[styles.reactionCount, r.user_ids.includes(user?.id || -1) && { color: '#007AFF' }]}>
+                                                {r.count}
+                                            </Text>
+                                        </TouchableOpacity>
+                                    ))}
+                                </View>
+                            )}
+
+                        </View>
+                    </TouchableOpacity>
+                </View>
+            </Swipeable>
         );
     };
 
@@ -720,11 +842,90 @@ export default function ChatRoomScreen() {
                     </View>
                 </SafeAreaView>
             </Modal>
+
+            {/* Reaction Picker Modal */}
+            <Modal
+                transparent
+                visible={showReactionPicker}
+                animationType="fade"
+                onRequestClose={() => setShowReactionPicker(false)}
+            >
+                <TouchableOpacity
+                    style={styles.modalOverlay}
+                    activeOpacity={1}
+                    onPress={() => setShowReactionPicker(false)}
+                >
+                    <View style={styles.reactionPickerContainer}>
+                        {REACTION_EMOJIS.map(emoji => (
+                            <TouchableOpacity
+                                key={emoji}
+                                style={styles.reactionOption}
+                                onPress={() => {
+                                    if (selectedMessageForReaction) {
+                                        handleReaction(selectedMessageForReaction.id, emoji);
+                                    }
+                                }}
+                            >
+                                <Text style={{ fontSize: 32 }}>{emoji}</Text>
+                            </TouchableOpacity>
+                        ))}
+                    </View>
+                </TouchableOpacity>
+            </Modal>
         </SafeAreaView>
     );
 }
 
 const styles = StyleSheet.create({
+    reactionsContainer: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 4,
+        marginTop: 6,
+        marginBottom: 2,
+    },
+    reactionChip: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: 'rgba(255,255,255,0.1)',
+        paddingHorizontal: 6,
+        paddingVertical: 2,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: 'rgba(255,255,255,0.1)',
+    },
+    reactionChipActive: {
+        backgroundColor: 'rgba(0,122,255,0.1)',
+        borderColor: '#007AFF',
+    },
+    reactionEmoji: {
+        fontSize: 12,
+        marginRight: 4,
+    },
+    reactionCount: {
+        fontSize: 10,
+        color: '#A0A0A0',
+        fontWeight: 'bold',
+    },
+    reactionPickerContainer: {
+        backgroundColor: 'white',
+        borderRadius: 30,
+        padding: 16,
+        flexDirection: 'row',
+        justifyContent: 'space-around',
+        width: '90%',
+        alignSelf: 'center',
+        marginBottom: 50,
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.25,
+        shadowRadius: 3.84,
+        elevation: 5,
+    },
+    reactionOption: {
+        padding: 5,
+        transform: [{ scale: 1 }]
+    },
     container: {
         flex: 1,
         backgroundColor: '#121212',
@@ -896,6 +1097,12 @@ const styles = StyleSheet.create({
         color: 'rgba(255, 255, 255, 0.5)',
         alignSelf: 'flex-end',
         marginTop: 4,
+    },
+    replyAction: {
+        justifyContent: 'center',
+        alignItems: 'center',
+        width: 64,
+        height: '100%', // Match height of container
     },
     inputContainer: {
         flexDirection: 'row',

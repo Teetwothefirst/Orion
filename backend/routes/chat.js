@@ -179,7 +179,89 @@ router.get('/:id/messages', (req, res) => {
 
     db.all(sql, [chatId], (err, messages) => {
         if (err) return res.status(500).send("Error retrieving messages.");
-        res.status(200).send(messages);
+
+        if (messages.length === 0) {
+            return res.status(200).send([]);
+        }
+
+        // Fetch reactions for these messages
+        const messageIds = messages.map(m => m.id);
+        const placeholders = messageIds.map(() => '?').join(',');
+        const reactionsSql = `
+            SELECT message_id, user_id, emoji
+            FROM message_reactions
+            WHERE message_id IN (${placeholders})
+        `;
+
+        db.all(reactionsSql, messageIds, (err, reactions) => {
+            if (err) {
+                console.error('Error fetching reactions:', err);
+                // Return messages without reactions if error
+                return res.status(200).send(messages);
+            }
+
+            // Map reactions to messages
+            const messagesWithReactions = messages.map(m => {
+                const messageReactions = reactions.filter(r => r.message_id === m.id);
+                // Group by emoji
+                const groupedReactions = {};
+                messageReactions.forEach(r => {
+                    if (!groupedReactions[r.emoji]) {
+                        groupedReactions[r.emoji] = {
+                            emoji: r.emoji,
+                            count: 0,
+                            user_ids: []
+                        };
+                    }
+                    groupedReactions[r.emoji].count++;
+                    groupedReactions[r.emoji].user_ids.push(r.user_id);
+                });
+                return { ...m, reactions: Object.values(groupedReactions) };
+            });
+
+            res.status(200).send(messagesWithReactions);
+        });
+    });
+});
+
+// Toggle reaction (Add/Remove)
+router.post('/messages/:messageId/react', (req, res) => {
+    const messageId = req.params.messageId;
+    const { userId, emoji } = req.body;
+
+    // Check if reaction exists
+    db.get(`SELECT id FROM message_reactions WHERE message_id = ? AND user_id = ? AND emoji = ?`, [messageId, userId, emoji], (err, existing) => {
+        if (err) return res.status(500).send("Error checking reaction.");
+
+        const emitUpdate = (action) => {
+            // Get chat_id for this message to broadcast
+            db.get(`SELECT chat_id FROM messages WHERE id = ?`, [messageId], (err, msg) => {
+                if (!err && msg && req.io) {
+                    req.io.to(msg.chat_id.toString()).emit('reaction_update', {
+                        messageId: parseInt(messageId),
+                        userId,
+                        emoji,
+                        action
+                    });
+                }
+            });
+        };
+
+        if (existing) {
+            // Remove reaction
+            db.run(`DELETE FROM message_reactions WHERE id = ?`, [existing.id], (err) => {
+                if (err) return res.status(500).send("Error removing reaction.");
+                emitUpdate('removed');
+                res.status(200).send({ action: 'removed', messageId, emoji, userId });
+            });
+        } else {
+            // Add reaction
+            db.run(`INSERT INTO message_reactions (message_id, user_id, emoji) VALUES (?, ?, ?)`, [messageId, userId, emoji], (err) => {
+                if (err) return res.status(500).send("Error adding reaction.");
+                emitUpdate('added');
+                res.status(200).send({ action: 'added', messageId, emoji, userId });
+            });
+        }
     });
 });
 

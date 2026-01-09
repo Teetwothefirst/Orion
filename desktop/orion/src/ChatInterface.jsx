@@ -41,6 +41,7 @@ const ChatInterface = () => {
   const [showJoinModal, setShowJoinModal] = useState(false);
   const [inviteCode, setInviteCode] = useState('');
   const [showAddMemberModal, setShowAddMemberModal] = useState(false);
+  const [activeReactionMessageId, setActiveReactionMessageId] = useState(null);
   const [isChannel, setIsChannel] = useState(false);
   const fileInputRef = useRef(null);
   const profileImageRef = useRef(null);
@@ -127,6 +128,38 @@ const ChatInterface = () => {
 
     socket.on('status_update', (data) => {
       setMessages(prev => prev.map(m => m.id === data.messageId ? { ...m, status: data.status } : m));
+    });
+
+    socket.on('reaction_update', (data) => {
+      setMessages(prev => prev.map(m => {
+        if (m.id === data.messageId) {
+          const currentReactions = m.reactions || [];
+          let newReactions;
+
+          if (data.action === 'added') {
+            // Check if emoji group exists
+            const existingGroup = currentReactions.find(r => r.emoji === data.emoji);
+            if (existingGroup) {
+              newReactions = currentReactions.map(r => r.emoji === data.emoji ? {
+                ...r,
+                count: r.count + 1,
+                user_ids: [...r.user_ids, data.userId]
+              } : r);
+            } else {
+              newReactions = [...currentReactions, { emoji: data.emoji, count: 1, user_ids: [data.userId] }];
+            }
+          } else {
+            // Removed
+            newReactions = currentReactions.map(r => r.emoji === data.emoji ? {
+              ...r,
+              count: r.count - 1,
+              user_ids: r.user_ids.filter(id => id !== data.userId)
+            } : r).filter(r => r.count > 0);
+          }
+          return { ...m, reactions: newReactions };
+        }
+        return m;
+      }));
     });
 
     socket.on('chat_read', (data) => {
@@ -442,6 +475,17 @@ const ChatInterface = () => {
     const contact = contacts.find(c => c.id === chatId);
     if (contact) {
       setSelectedContact(contact);
+    }
+  };
+
+  const handleReaction = async (messageId, emoji) => {
+    try {
+      await api.post(`/chats/messages/${messageId}/react`, {
+        userId: user.id,
+        emoji
+      });
+    } catch (error) {
+      console.error('Error toggling reaction:', error);
     }
   };
 
@@ -883,10 +927,61 @@ const ChatInterface = () => {
                           {message.status === 'read' && <CheckCheck size={14} color="#60a5fa" />}
                         </div>
                       )}
+
                     </div>
+
+                    {/* Reactions Display */}
+                    {message.reactions && message.reactions.length > 0 && (
+                      <div style={styles.reactionList}>
+                        {message.reactions.map((r, idx) => (
+                          <div
+                            key={idx}
+                            style={{
+                              ...styles.reactionChip,
+                              backgroundColor: r.user_ids.includes(user.id) ? '#dbeafe' : 'rgba(255,255,255,0.9)',
+                              border: r.user_ids.includes(user.id) ? '1px solid #3b82f6' : '1px solid #e5e7eb'
+                            }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleReaction(message.id, r.emoji);
+                            }}
+                          >
+                            <span>{r.emoji}</span>
+                            <span style={{ fontSize: '10px', marginLeft: '4px', fontWeight: 'bold' }}>{r.count}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
 
                     {/* Message Hover Actions */}
                     <div style={styles.messageActions}>
+                      <div style={{ position: 'relative' }}>
+                        <Heart
+                          size={16}
+                          style={{ ...styles.actionIcon, color: message.reactions?.some(r => r.user_ids.includes(user.id)) ? 'red' : '#6b7280' }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setActiveReactionMessageId(activeReactionMessageId === message.id ? null : message.id);
+                          }}
+                        />
+                        {/* Reaction Picker Popup */}
+                        {activeReactionMessageId === message.id && (
+                          <div style={styles.reactionPickerPopup} onClick={(e) => e.stopPropagation()}>
+                            {['❤️', '👍', '😂', '😮', '😢', '😡'].map(emoji => (
+                              <span
+                                key={emoji}
+                                style={styles.reactionPickerItem}
+                                onClick={() => {
+                                  handleReaction(message.id, emoji);
+                                  setActiveReactionMessageId(null);
+                                }}
+                              >
+                                {emoji}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
                       <Reply size={16} style={styles.actionIcon} onClick={() => setReplyTo(message)} />
                       <Forward size={16} style={styles.actionIcon} onClick={() => {
                         setForwardingMessage(message);
@@ -1603,6 +1698,44 @@ const styles = {
     justifyContent: 'space-between',
     padding: '12px 16px',
     borderBottom: '1px solid #f3f4f6'
+  },
+  reactionList: {
+    display: 'flex',
+    flexWrap: 'wrap',
+    gap: '4px',
+    marginTop: '6px',
+    marginBottom: '2px'
+  },
+  reactionChip: {
+    display: 'flex',
+    alignItems: 'center',
+    padding: '2px 6px',
+    borderRadius: '12px',
+    fontSize: '12px',
+    cursor: 'pointer',
+    boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
+    userSelect: 'none'
+  },
+  reactionPickerPopup: {
+    position: 'absolute',
+    bottom: '100%',
+    left: '50%',
+    transform: 'translateX(-50%)',
+    backgroundColor: 'white',
+    padding: '6px',
+    borderRadius: '20px',
+    boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+    display: 'flex',
+    gap: '8px',
+    marginBottom: '8px',
+    zIndex: 20,
+    whiteSpace: 'nowrap'
+  },
+  reactionPickerItem: {
+    fontSize: '18px',
+    cursor: 'pointer',
+    transition: 'transform 0.1s',
+    ':hover': { transform: 'scale(1.2)' }
   },
   toggleContainer: {
     padding: '12px 16px',

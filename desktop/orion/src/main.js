@@ -33,8 +33,8 @@ const createWindow = () => {
         ...details.responseHeaders,
         'Content-Security-Policy': [
           "default-src 'self' 'unsafe-inline' data:; " +
-          "img-src 'self' data: https://res.cloudinary.com https://*.giphy.com https://media*.giphy.com; " +
-          "media-src 'self' https://res.cloudinary.com https://*.giphy.com; " +
+          "img-src 'self' data: https:; " +
+          "media-src 'self' https:; " +
           "connect-src 'self' http://127.0.0.1:3001 http://localhost:3001 ws://127.0.0.1:3001 ws://localhost:3001 https://*.onrender.com wss://*.onrender.com https://api.giphy.com; " +
           "script-src 'self' 'unsafe-inline' 'unsafe-eval';"
         ]
@@ -43,7 +43,18 @@ const createWindow = () => {
   });
 
   // Open the DevTools.
-  mainWindow.webContents.openDevTools();
+  // mainWindow.webContents.openDevTools();
+
+  // Handle DevTools toggle manually since menu bar is hidden
+  mainWindow.webContents.on('before-input-event', (event, input) => {
+    if (input.control && input.shift && input.key.toLowerCase() === 'i') {
+      mainWindow.webContents.toggleDevTools();
+      event.preventDefault();
+    } else if (input.key === 'F12') {
+      mainWindow.webContents.toggleDevTools();
+      event.preventDefault();
+    }
+  });
 };
 
 // This method will be called when Electron has finished

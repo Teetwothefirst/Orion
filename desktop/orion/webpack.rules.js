@@ -22,7 +22,8 @@ module.exports = [
       loader: 'babel-loader',
       options: {
         exclude: [/node_modules/, /preload\.js$/],
-        presets: ['@babel/preset-react']
+        presets: ['@babel/preset-react'],
+        cacheDirectory: true
       }
     }
   }

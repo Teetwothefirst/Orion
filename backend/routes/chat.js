@@ -281,6 +281,36 @@ router.post('/join/:code', (req, res) => {
     });
 });
 
+// Add participants directly (Admin/Owner only)
+router.post('/:id/participants', (req, res) => {
+    const chatId = req.params.id;
+    const { adminId, userIds } = req.body; // userIds is array of ids
+
+    if (!userIds || !Array.isArray(userIds) || userIds.length === 0) {
+        return res.status(400).send("No users specified.");
+    }
+
+    // Check permissions
+    db.get(`SELECT role FROM chat_participants WHERE chat_id = ? AND user_id = ?`, [chatId, adminId], (err, participant) => {
+        if (err || !participant || (participant.role !== 'admin' && participant.role !== 'owner')) {
+            return res.status(403).send("Permission denied. Only admins can add members.");
+        }
+
+        // Add users
+        const placeholders = userIds.map(() => '(?, ?, \'member\')').join(',');
+        const values = userIds.flatMap(uid => [chatId, uid]);
+
+        // Use INSERT OR IGNORE to skip duplicates
+        db.run(`INSERT OR IGNORE INTO chat_participants (chat_id, user_id, role) VALUES ${placeholders}`, values, (err) => {
+            if (err) {
+                console.error('Error adding participants:', err);
+                return res.status(500).send("Error adding participants.");
+            }
+            res.status(200).send({ message: "Participants added successfully" });
+        });
+    });
+});
+
 // Update participant role (Admin/Owner only)
 router.post('/:id/role', (req, res) => {
     const chatId = req.params.id;

@@ -42,6 +42,9 @@ export default function ChatRoomScreen() {
     const [participants, setParticipants] = useState<any[]>([]);
     const [myRole, setMyRole] = useState('member');
     const [showMediaPicker, setShowMediaPicker] = useState(false);
+    const [showAddMember, setShowAddMember] = useState(false);
+    const [userSearchQuery, setUserSearchQuery] = useState('');
+    const [potentialMembers, setPotentialMembers] = useState<any[]>([]);
     const flatListRef = useRef<FlatList>(null);
     const { user } = useAuth();
     const router = useRouter();
@@ -151,6 +154,35 @@ export default function ChatRoomScreen() {
                 }
             }
         ]);
+    };
+
+    const fetchPotentialMembers = async (query: string) => {
+        if (!query.trim()) {
+            setPotentialMembers([]);
+            return;
+        }
+        try {
+            const response = await api.get(`/chats/search?q=${query}&userId=${user?.id}`);
+            // Filter out existing participants
+            const nonMembers = response.data.users.filter((u: any) => !participants.some(p => p.id === u.id));
+            setPotentialMembers(nonMembers);
+        } catch (error) {
+            console.error('Error fetching users:', error);
+        }
+    };
+
+    const handleAddMember = async (targetUserId: number) => {
+        try {
+            await api.post(`/chats/${id}/participants`, {
+                adminId: user?.id,
+                userIds: [targetUserId]
+            });
+            Alert.alert('Success', 'Member added successfully');
+            setShowAddMember(false);
+            fetchParticipants();
+        } catch (error: any) {
+            Alert.alert('Error', error.response?.data || 'Failed to add member');
+        }
     };
 
     const handleUpdateRole = async (targetUserId: number, newRole: string) => {
@@ -585,7 +617,14 @@ export default function ChatRoomScreen() {
                                 )}
                             </View>
 
-                            <Text style={styles.sectionTitle}>Participants ({participants.length})</Text>
+                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                                <Text style={[styles.sectionTitle, { marginBottom: 0 }]}>Participants ({participants.length})</Text>
+                                {(myRole === 'owner' || myRole === 'admin') && (
+                                    <TouchableOpacity onPress={() => { setShowGroupInfo(false); setShowAddMember(true); }}>
+                                        <Text style={{ color: '#007AFF', fontWeight: 'bold' }}>+ Add Member</Text>
+                                    </TouchableOpacity>
+                                )}
+                            </View>
                             {participants.map((p: any) => (
                                 <View key={p.id} style={styles.participantItem}>
                                     <Image source={{ uri: p.avatar || 'https://i.pravatar.cc/100' }} style={styles.participantAvatar} />
@@ -621,6 +660,65 @@ export default function ChatRoomScreen() {
                         </ScrollView>
                     </View>
                 </View>
+            </Modal>
+
+            {/* Add Member Modal */}
+            <Modal
+                visible={showAddMember}
+                animationType="slide"
+                presentationStyle="pageSheet"
+                onRequestClose={() => setShowAddMember(false)}
+            >
+                <SafeAreaView style={{ flex: 1, backgroundColor: '#fff' }}>
+                    <View style={styles.modalHeader}>
+                        <Text style={styles.modalTitle}>Add Members</Text>
+                        <TouchableOpacity onPress={() => setShowAddMember(false)}>
+                            <Ionicons name="close" size={24} color="#000" />
+                        </TouchableOpacity>
+                    </View>
+                    <View style={{ padding: 16 }}>
+                        <TextInput
+                            style={{
+                                backgroundColor: '#F0F0F0',
+                                padding: 12,
+                                borderRadius: 10,
+                                fontSize: 16,
+                                marginBottom: 16
+                            }}
+                            placeholder="Search users..."
+                            value={userSearchQuery}
+                            onChangeText={(text) => {
+                                setUserSearchQuery(text);
+                                fetchPotentialMembers(text);
+                            }}
+                            autoFocus
+                        />
+                        <FlatList
+                            data={potentialMembers}
+                            keyExtractor={(item) => item.id.toString()}
+                            renderItem={({ item }) => (
+                                <TouchableOpacity
+                                    style={styles.participantItem}
+                                    onPress={() => handleAddMember(item.id)}
+                                >
+                                    <Image source={{ uri: item.avatar || 'https://i.pravatar.cc/100' }} style={styles.participantAvatar} />
+                                    <View style={{ marginLeft: 12 }}>
+                                        <Text style={styles.participantName}>{item.username}</Text>
+                                        <Text style={{ color: '#666', fontSize: 12 }}>{item.email}</Text>
+                                    </View>
+                                    <Ionicons name="add-circle-outline" size={24} color="#007AFF" style={{ marginLeft: 'auto' }} />
+                                </TouchableOpacity>
+                            )}
+                            ListEmptyComponent={
+                                userSearchQuery ? (
+                                    <Text style={{ textAlign: 'center', color: '#888', marginTop: 20 }}>No users found</Text>
+                                ) : (
+                                    <Text style={{ textAlign: 'center', color: '#888', marginTop: 20 }}>Type to search users</Text>
+                                )
+                            }
+                        />
+                    </View>
+                </SafeAreaView>
             </Modal>
         </SafeAreaView>
     );

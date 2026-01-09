@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Search, MoreHorizontal, Send, Home, MessageCircle, Users, Heart, Bell, Plus, X, Paperclip, Check, CheckCheck, Reply, Forward, FileText, Play, Sticker, Smile } from 'lucide-react';
+import EmojiPicker from 'emoji-picker-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from './context/AuthContext.jsx';
 import { api, socket } from './services/api.js';
@@ -29,7 +30,7 @@ const ChatInterface = () => {
   const [gifSearch, setGifSearch] = useState('');
   const [gifs, setGifs] = useState([]);
   const [stickerPacks, setStickerPacks] = useState([]);
-  const GIPHY_API_KEY = 'dc6zaTOxFJmzC';
+  const GIPHY_API_KEY = process.env.GIPHY_API_KEY;
   const [userSearchQuery, setUserSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState('chat');
   const [searchQuery, setSearchQuery] = useState('');
@@ -39,6 +40,7 @@ const ChatInterface = () => {
   const [myRole, setMyRole] = useState('member');
   const [showJoinModal, setShowJoinModal] = useState(false);
   const [inviteCode, setInviteCode] = useState('');
+  const [showAddMemberModal, setShowAddMemberModal] = useState(false);
   const [isChannel, setIsChannel] = useState(false);
   const fileInputRef = useRef(null);
   const profileImageRef = useRef(null);
@@ -215,6 +217,10 @@ const ChatInterface = () => {
     setShowMediaPicker(false);
   };
 
+  const onEmojiClick = (emojiData) => {
+    setMessageInput(prev => prev + emojiData.emoji);
+  };
+
   const handleGlobalSearch = async (query) => {
     setSearchQuery(query);
     if (!query.trim()) {
@@ -368,6 +374,26 @@ const ChatInterface = () => {
 
     socket.emit('send_message', messageData);
     setMessageInput('');
+  };
+
+  const handleAddMembers = async () => {
+    const selectedCheckboxes = document.querySelectorAll('input[name="addMemberSelect"]:checked');
+    const selectedIds = Array.from(selectedCheckboxes).map(cb => cb.value);
+
+    if (selectedIds.length === 0) return alert('Please select users to add.');
+
+    try {
+      await api.post(`/chats/${selectedContact.id}/participants`, {
+        adminId: user.id,
+        userIds: selectedIds
+      });
+      setShowAddMemberModal(false);
+      fetchParticipants(selectedContact.id);
+      alert('Members added successfully!');
+    } catch (error) {
+      console.error('Error adding members:', error);
+      alert('Failed to add members.');
+    }
   };
 
   const handleFileUpload = async (e) => {
@@ -928,6 +954,12 @@ const ChatInterface = () => {
                 <div style={styles.mediaPickerContainer}>
                   <div style={styles.mediaPickerTabs}>
                     <button
+                      style={{ ...styles.mediaTab, borderBottom: mediaTab === 'emoji' ? '2px solid #007AFF' : 'none', color: mediaTab === 'emoji' ? '#007AFF' : '#6b7280' }}
+                      onClick={() => setMediaTab('emoji')}
+                    >
+                      Emoji
+                    </button>
+                    <button
                       style={{ ...styles.mediaTab, borderBottom: mediaTab === 'gif' ? '2px solid #007AFF' : 'none', color: mediaTab === 'gif' ? '#007AFF' : '#6b7280' }}
                       onClick={() => setMediaTab('gif')}
                     >
@@ -942,7 +974,18 @@ const ChatInterface = () => {
                     <X size={18} style={{ cursor: 'pointer', marginLeft: 'auto' }} onClick={() => setShowMediaPicker(false)} />
                   </div>
 
-                  {mediaTab === 'gif' ? (
+
+                  {mediaTab === 'emoji' ? (
+                    <div style={{ flex: 1, overflow: 'hidden' }}>
+                      <EmojiPicker
+                        onEmojiClick={onEmojiClick}
+                        width="100%"
+                        height="100%"
+                        searchDisabled={false}
+                        skinTonesDisabled
+                      />
+                    </div>
+                  ) : mediaTab === 'gif' ? (
                     <>
                       <div style={styles.mediaPickerHeader}>
                         <input
@@ -1308,9 +1351,22 @@ const ChatInterface = () => {
               </div>
 
               <div style={{ padding: '16px' }}>
-                <h4 style={{ fontSize: '14px', color: '#6b7280', marginBottom: '12px', textTransform: 'uppercase' }}>
-                  Participants ({participants.length})
-                </h4>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                  <h4 style={{ fontSize: '14px', color: '#6b7280', margin: 0, textTransform: 'uppercase' }}>
+                    Participants ({participants.length})
+                  </h4>
+                  {(myRole === 'owner' || myRole === 'admin') && (
+                    <button
+                      style={{ fontSize: '12px', color: '#3b82f6', border: 'none', background: 'none', cursor: 'pointer', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '4px' }}
+                      onClick={() => {
+                        setShowGroupInfo(false);
+                        setShowAddMemberModal(true);
+                      }}
+                    >
+                      <Plus size={14} /> Add Member
+                    </button>
+                  )}
+                </div>
                 <div style={{ ...styles.userList, maxHeight: '300px' }}>
                   {participants.map(p => (
                     <div key={p.id} style={{ ...styles.userItem, cursor: 'default' }}>
@@ -1377,6 +1433,64 @@ const ChatInterface = () => {
                   onClick={handleJoinGroup}
                 >
                   Join Community
+                </button>
+              </div>
+            </div>
+          </div>
+        )
+      }
+      {/* Add Member Modal */}
+      {
+        showAddMemberModal && (
+          <div style={styles.modalOverlay} onClick={() => setShowAddMemberModal(false)}>
+            <div style={styles.modalContent} onClick={(e) => e.stopPropagation()}>
+              <div style={styles.modalHeader}>
+                <h2 style={styles.modalTitle}>Add Members</h2>
+                <X size={24} style={{ cursor: 'pointer', color: '#6b7280' }} onClick={() => setShowAddMemberModal(false)} />
+              </div>
+
+              <input
+                type="text"
+                placeholder="Search users to add..."
+                value={userSearchQuery}
+                onChange={(e) => setUserSearchQuery(e.target.value)}
+                style={styles.searchInput}
+                autoFocus
+              />
+
+              <div style={styles.userList}>
+                {filteredUsers.filter(u => !participants.some(p => p.id === u.id)).map((u) => (
+                  <div
+                    key={u.id}
+                    style={styles.userItem}
+                    onClick={() => {
+                      const cb = document.getElementById(`add-member-cb-${u.id}`);
+                      if (cb) cb.click();
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      name="addMemberSelect"
+                      value={u.id}
+                      id={`add-member-cb-${u.id}`}
+                      onClick={(e) => e.stopPropagation()}
+                      style={{ marginRight: '12px' }}
+                    />
+                    <div style={styles.userItemAvatar}>👤</div>
+                    <div style={styles.userItemInfo}>
+                      <p style={styles.userItemName}>{u.username}</p>
+                      <p style={styles.userItemEmail}>{u.email}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div style={{ padding: '16px', borderTop: '1px solid #f3f4f6' }}>
+                <button
+                  style={{ ...styles.sendButton, width: '100%', borderRadius: '12px' }}
+                  onClick={handleAddMembers}
+                >
+                  Add Selected Users
                 </button>
               </div>
             </div>

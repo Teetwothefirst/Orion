@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Search, MoreHorizontal, Send, Home, MessageCircle, Users, Heart, Bell, Plus, X, Paperclip, Check, CheckCheck, Reply, Forward, FileText, Play, Sticker, Smile } from 'lucide-react';
+import { Search, MoreHorizontal, MoreVertical, Send, Home, MessageCircle, Users, Heart, Bell, Plus, X, Paperclip, Check, CheckCheck, Reply, Forward, FileText, Play, Sticker, Smile } from 'lucide-react';
 import EmojiPicker from 'emoji-picker-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from './context/AuthContext.jsx';
@@ -42,6 +42,7 @@ const ChatInterface = () => {
   const [inviteCode, setInviteCode] = useState('');
   const [showAddMemberModal, setShowAddMemberModal] = useState(false);
   const [activeReactionMessageId, setActiveReactionMessageId] = useState(null);
+  const [activeMessageMenu, setActiveMessageMenu] = useState(null);
   const [isChannel, setIsChannel] = useState(false);
   const fileInputRef = useRef(null);
   const profileImageRef = useRef(null);
@@ -956,14 +957,50 @@ const ChatInterface = () => {
                     {/* Message Hover Actions */}
                     <div style={styles.messageActions}>
                       <div style={{ position: 'relative' }}>
-                        <Heart
+                        <MoreVertical
                           size={16}
-                          style={{ ...styles.actionIcon, color: message.reactions?.some(r => r.user_ids.includes(user.id)) ? 'red' : '#6b7280' }}
+                          style={styles.actionIcon}
                           onClick={(e) => {
                             e.stopPropagation();
-                            setActiveReactionMessageId(activeReactionMessageId === message.id ? null : message.id);
+                            setActiveMessageMenu(activeMessageMenu === message.id ? null : message.id);
                           }}
                         />
+                        {/* Dropdown Menu */}
+                        {activeMessageMenu === message.id && (
+                          <div style={styles.messageDropdown} onClick={(e) => e.stopPropagation()}>
+                            <div
+                              style={styles.dropdownItem}
+                              onClick={() => {
+                                setActiveReactionMessageId(message.id);
+                                setActiveMessageMenu(null);
+                              }}
+                            >
+                              <Heart size={14} style={{ marginRight: '8px' }} />
+                              React
+                            </div>
+                            <div
+                              style={styles.dropdownItem}
+                              onClick={() => {
+                                setReplyTo(message);
+                                setActiveMessageMenu(null);
+                              }}
+                            >
+                              <Reply size={14} style={{ marginRight: '8px' }} />
+                              Reply
+                            </div>
+                            <div
+                              style={styles.dropdownItem}
+                              onClick={() => {
+                                setForwardingMessage(message);
+                                setShowForwardModal(true);
+                                setActiveMessageMenu(null);
+                              }}
+                            >
+                              <Forward size={14} style={{ marginRight: '8px' }} />
+                              Forward
+                            </div>
+                          </div>
+                        )}
                         {/* Reaction Picker Popup */}
                         {activeReactionMessageId === message.id && (
                           <div style={styles.reactionPickerPopup} onClick={(e) => e.stopPropagation()}>
@@ -982,11 +1019,6 @@ const ChatInterface = () => {
                           </div>
                         )}
                       </div>
-                      <Reply size={16} style={styles.actionIcon} onClick={() => setReplyTo(message)} />
-                      <Forward size={16} style={styles.actionIcon} onClick={() => {
-                        setForwardingMessage(message);
-                        setShowForwardModal(true);
-                      }} />
                     </div>
                   </div>
                   {
@@ -1737,6 +1769,30 @@ const styles = {
     transition: 'transform 0.1s',
     ':hover': { transform: 'scale(1.2)' }
   },
+  messageDropdown: {
+    position: 'absolute',
+    top: '100%',
+    right: '0',
+    marginTop: '4px',
+    backgroundColor: 'white',
+    borderRadius: '8px',
+    boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+    minWidth: '140px',
+    zIndex: 20,
+    overflow: 'hidden'
+  },
+  dropdownItem: {
+    display: 'flex',
+    alignItems: 'center',
+    padding: '10px 16px',
+    cursor: 'pointer',
+    fontSize: '14px',
+    color: '#1f2937',
+    transition: 'background-color 0.15s',
+    ':hover': {
+      backgroundColor: '#f3f4f6'
+    }
+  },
   toggleContainer: {
     padding: '12px 16px',
     borderBottom: '1px solid #f3f4f6',
@@ -1929,7 +1985,8 @@ const styles = {
   messageBubble: {
     maxWidth: '448px',
     padding: '12px 16px',
-    borderRadius: '16px'
+    borderRadius: '16px',
+    position: 'relative'
   },
   messageBubbleOwn: {
     backgroundColor: '#3b82f6',
@@ -2164,17 +2221,18 @@ const styles = {
   },
   messageActions: {
     position: 'absolute',
-    right: '-30px',
-    top: '50%',
-    transform: 'translateY(-50%)',
-    display: 'none',
-    gap: '8px'
+    right: '8px',
+    top: '8px',
+    backgroundColor: 'rgba(255,255,255,0.9)',
+    borderRadius: '50%',
+    padding: '4px',
+    boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+    cursor: 'pointer'
   },
   actionIcon: {
     cursor: 'pointer',
     opacity: 0.6,
     transition: 'opacity 0.2s',
-    ':hover': { opacity: 1 }
   },
   replyPreview: {
     padding: '8px 16px',

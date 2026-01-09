@@ -71,6 +71,7 @@ export default function MediaPicker({ onSelect, onClose }: MediaPickerProps) {
         <View style={styles.stickerPack}>
             <Text style={styles.stickerPackTitle}>{item.name}</Text>
             <FlatList
+                key="sticker-grid"
                 data={item.stickers}
                 keyExtractor={(s) => s.id}
                 numColumns={4}
@@ -133,6 +134,7 @@ export default function MediaPicker({ onSelect, onClose }: MediaPickerProps) {
             ) : (
                 tab === 'gif' ? (
                     <FlatList
+                        key="gif-grid"
                         data={gifs}
                         keyExtractor={(item) => item.id}
                         numColumns={2}

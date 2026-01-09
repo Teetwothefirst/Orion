@@ -1,5 +1,26 @@
 import * as SecureStore from 'expo-secure-store';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Platform } from 'react-native';
+
+const isWeb = Platform.OS === 'web';
+
+/**
+ * Helper to abstract SecureStore vs AsyncStorage for Web support
+ */
+const SecureStorage = {
+    getItemAsync: async (key: string) => {
+        if (isWeb) return AsyncStorage.getItem(key);
+        return SecureStore.getItemAsync(key);
+    },
+    setItemAsync: async (key: string, value: string) => {
+        if (isWeb) return AsyncStorage.setItem(key, value);
+        return SecureStore.setItemAsync(key, value);
+    },
+    deleteItemAsync: async (key: string) => {
+        if (isWeb) return AsyncStorage.removeItem(key);
+        return SecureStore.deleteItemAsync(key);
+    }
+};
 
 /**
  * SignalStore.ts (Mobile)
@@ -64,18 +85,18 @@ export class SignalStore {
 
     // Identity and registration info (Extremely sensitive)
     async getIdentityKeyPair(): Promise<any> {
-        const val = await SecureStore.getItemAsync('signal_identityKey');
+        const val = await SecureStorage.getItemAsync('signal_identityKey');
         return val ? this._deserialize(JSON.parse(val)) : null;
     }
 
     async getLocalRegistrationId(): Promise<number | null> {
-        const val = await SecureStore.getItemAsync('signal_registrationId');
+        const val = await SecureStorage.getItemAsync('signal_registrationId');
         return val ? JSON.parse(val) : null;
     }
 
     async put(key: string, value: any) {
         // Generic put for registrationId and identityKey
-        await SecureStore.setItemAsync('signal_' + key, JSON.stringify(this._serialize(value)));
+        await SecureStorage.setItemAsync('signal_' + key, JSON.stringify(this._serialize(value)));
     }
 
     async putIdentity(address: string, identityKey: ArrayBuffer) {
@@ -104,30 +125,30 @@ export class SignalStore {
 
     // PreKeys (One-time usage, sensitive)
     async loadPreKey(keyId: number): Promise<any> {
-        const val = await SecureStore.getItemAsync(`signal_prekey_${keyId}`);
+        const val = await SecureStorage.getItemAsync(`signal_prekey_${keyId}`);
         return val ? this._deserialize(JSON.parse(val)) : null;
     }
 
     async storePreKey(keyId: number, keyPair: any) {
-        await SecureStore.setItemAsync(`signal_prekey_${keyId}`, JSON.stringify(this._serialize(keyPair)));
+        await SecureStorage.setItemAsync(`signal_prekey_${keyId}`, JSON.stringify(this._serialize(keyPair)));
     }
 
     async removePreKey(keyId: number) {
-        await SecureStore.deleteItemAsync(`signal_prekey_${keyId}`);
+        await SecureStorage.deleteItemAsync(`signal_prekey_${keyId}`);
     }
 
     // Signed PreKeys (Sensitive)
     async loadSignedPreKey(keyId: number): Promise<any> {
-        const val = await SecureStore.getItemAsync(`signal_signedprekey_${keyId}`);
+        const val = await SecureStorage.getItemAsync(`signal_signedprekey_${keyId}`);
         return val ? this._deserialize(JSON.parse(val)) : null;
     }
 
     async storeSignedPreKey(keyId: number, keyPair: any) {
-        await SecureStore.setItemAsync(`signal_signedprekey_${keyId}`, JSON.stringify(this._serialize(keyPair)));
+        await SecureStorage.setItemAsync(`signal_signedprekey_${keyId}`, JSON.stringify(this._serialize(keyPair)));
     }
 
     async removeSignedPreKey(keyId: number) {
-        await SecureStore.deleteItemAsync(`signal_signedprekey_${keyId}`);
+        await SecureStorage.deleteItemAsync(`signal_signedprekey_${keyId}`);
     }
 
     // Sessions (Can be large, stored in AsyncStorage)

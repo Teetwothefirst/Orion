@@ -132,6 +132,7 @@ const ChatInterface = () => {
     });
 
     socket.on('reaction_update', (data) => {
+      console.log('Received reaction_update:', data);
       setMessages(prev => prev.map(m => {
         if (m.id === data.messageId) {
           const currentReactions = m.reactions || [];
@@ -157,6 +158,7 @@ const ChatInterface = () => {
               user_ids: r.user_ids.filter(id => id !== data.userId)
             } : r).filter(r => r.count > 0);
           }
+          console.log('Updated reactions for message:', { messageId: m.id, newReactions });
           return { ...m, reactions: newReactions };
         }
         return m;
@@ -355,7 +357,8 @@ const ChatInterface = () => {
         forwarded_from_id: msg.forwarded_from_id,
         time: new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         isOwn: msg.sender_id === user.id,
-        avatar: msg.avatar
+        avatar: msg.avatar,
+        reactions: msg.reactions || []
       }));
       setMessages(await Promise.all(formattedMessages.map(async (m) => {
         if (m.type === 'encrypted') {
@@ -481,10 +484,12 @@ const ChatInterface = () => {
 
   const handleReaction = async (messageId, emoji) => {
     try {
+      console.log('Sending reaction:', { messageId, emoji, userId: user.id });
       await api.post(`/chats/messages/${messageId}/react`, {
         userId: user.id,
         emoji
       });
+      console.log('Reaction sent successfully');
     } catch (error) {
       console.error('Error toggling reaction:', error);
     }
@@ -871,9 +876,18 @@ const ChatInterface = () => {
                     </div>
                   )}
                   <div
+                    className="message-bubble-container"
                     style={{
                       ...styles.messageBubble,
                       ...(message.isOwn ? styles.messageBubbleOwn : styles.messageBubbleOther)
+                    }}
+                    onMouseEnter={(e) => {
+                      const actions = e.currentTarget.querySelector('.message-actions');
+                      if (actions) actions.style.opacity = '1';
+                    }}
+                    onMouseLeave={(e) => {
+                      const actions = e.currentTarget.querySelector('.message-actions');
+                      if (actions) actions.style.opacity = '0';
                     }}
                   >
                     {message.reply_to_id && (
@@ -955,7 +969,7 @@ const ChatInterface = () => {
                     )}
 
                     {/* Message Hover Actions */}
-                    <div style={styles.messageActions}>
+                    <div className="message-actions" style={styles.messageActions}>
                       <div style={{ position: 'relative' }}>
                         <MoreVertical
                           size={16}
@@ -2223,16 +2237,19 @@ const styles = {
     position: 'absolute',
     right: '8px',
     top: '8px',
-    backgroundColor: 'rgba(255,255,255,0.9)',
-    borderRadius: '50%',
-    padding: '4px',
-    boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-    cursor: 'pointer'
+    opacity: 0,
+    transition: 'opacity 0.2s ease',
+    backgroundColor: 'rgba(0,0,0,0.05)',
+    borderRadius: '4px',
+    padding: '2px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center'
   },
   actionIcon: {
     cursor: 'pointer',
-    opacity: 0.6,
-    transition: 'opacity 0.2s',
+    color: '#6b7280',
+    transition: 'color 0.2s'
   },
   replyPreview: {
     padding: '8px 16px',

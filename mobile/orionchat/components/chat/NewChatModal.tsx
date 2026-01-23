@@ -45,7 +45,10 @@ export default function NewChatModal({ visible, onClose, onUserSelect }: NewChat
                 ? `/users/search?q=${searchQuery}&currentUserId=${currentUser?.id}`
                 : `/users?currentUserId=${currentUser?.id}`;
 
+            console.log('Fetching users from:', endpoint);
             const response = await api.get(endpoint);
+            console.log('Users response status:', response.status);
+            console.log('Users found:', response.data.length);
             setUsers(response.data);
         } catch (error) {
             console.error('Error fetching users:', error);

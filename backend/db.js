@@ -196,14 +196,21 @@ const initDb = () => {
                 "ALTER TABLE users ADD COLUMN reset_token TEXT",
                 "ALTER TABLE users ADD COLUMN reset_token_expiry INTEGER",
                 "ALTER TABLE users ADD COLUMN bio TEXT",
-                "ALTER TABLE users ADD COLUMN last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP",
+                // SQLite workaround for ADD COLUMN ... DEFAULT CURRENT_TIMESTAMP
+                "ALTER TABLE users ADD COLUMN last_seen TIMESTAMP",
+                "UPDATE users SET last_seen = CURRENT_TIMESTAMP WHERE last_seen IS NULL",
+                "CREATE TRIGGER IF NOT EXISTS user_last_seen_trigger AFTER INSERT ON users FOR EACH ROW WHEN NEW.last_seen IS NULL BEGIN UPDATE users SET last_seen = CURRENT_TIMESTAMP WHERE id = NEW.id; END;",
+
                 "ALTER TABLE messages ADD COLUMN type TEXT DEFAULT 'text'",
                 "ALTER TABLE messages ADD COLUMN media_url TEXT",
                 "ALTER TABLE messages ADD COLUMN status TEXT DEFAULT 'sent'",
                 "ALTER TABLE messages ADD COLUMN reply_to_id INTEGER",
                 "ALTER TABLE messages ADD COLUMN forwarded_from_id INTEGER",
                 "ALTER TABLE chats ADD COLUMN creator_id INTEGER",
-                "ALTER TABLE chats ADD COLUMN invite_code TEXT UNIQUE",
+                // SQLite workaround for ADD COLUMN ... UNIQUE
+                "ALTER TABLE chats ADD COLUMN invite_code TEXT",
+                "CREATE UNIQUE INDEX IF NOT EXISTS idx_chats_invite_code ON chats(invite_code)",
+
                 "ALTER TABLE chat_participants ADD COLUMN role TEXT DEFAULT 'member'"
             ];
 

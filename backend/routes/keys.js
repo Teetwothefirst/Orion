@@ -16,18 +16,10 @@ router.post('/identity', (req, res) => {
         [userId, publicKey, registrationId],
         function (err) {
             if (err) {
-                // Handle SQLite which doesn't support ON CONFLICT(user_id) DO UPDATE in older versions 
-                // but we can try a separate update if insert fails
-                db.run(`UPDATE signal_identities SET public_key=?, registration_id=? WHERE user_id=?`,
-                    [publicKey, registrationId, userId],
-                    (updateErr) => {
-                        if (updateErr) return res.status(500).send(updateErr.message);
-                        res.send({ success: true });
-                    }
-                );
-            } else {
-                res.send({ success: true });
+                console.error('Error saving identity key:', err);
+                return res.status(500).send(err.message);
             }
+            res.send({ success: true });
         }
     );
 });
@@ -44,14 +36,20 @@ router.post('/prekeys', (req, res) => {
 
     // Clear old prekeys first (optional, but keep it clean)
     db.run(`DELETE FROM signal_prekeys WHERE user_id = ?`, [userId], (err) => {
-        if (err) return res.status(500).send(err.message);
+        if (err) {
+            console.error('Error clearing prekeys:', err);
+            return res.status(500).send(err.message);
+        }
 
         // Insert Signed PreKey
         db.run(
             `INSERT INTO signal_prekeys (user_id, key_id, public_key, signature, type) VALUES (?, ?, ?, ?, 'signed')`,
             [userId, signedPreKey.keyId, signedPreKey.publicKey, signedPreKey.signature],
             (err) => {
-                if (err) return res.status(500).send(err.message);
+                if (err) {
+                    console.error('Error inserting signed prekey:', err);
+                    return res.status(500).send(err.message);
+                }
 
                 // Insert One-Time PreKeys
                 if (oneTimePreKeys && oneTimePreKeys.length > 0) {
@@ -65,7 +63,10 @@ router.post('/prekeys', (req, res) => {
                         `INSERT INTO signal_prekeys (user_id, key_id, public_key, signature, type) VALUES ${placeholders}`,
                         params,
                         (err) => {
-                            if (err) return res.status(500).send(err.message);
+                            if (err) {
+                                console.error('Error inserting one-time prekeys:', err);
+                                return res.status(500).send(err.message);
+                            }
                             res.send({ success: true, count: oneTimePreKeys.length });
                         }
                     );

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Search, MoreHorizontal, MoreVertical, Send, Home, MessageCircle, Users, Heart, Bell, Plus, X, Paperclip, Check, CheckCheck, Reply, Forward, FileText, Play, Sticker, Smile } from 'lucide-react';
+import { Search, MoreHorizontal, MoreVertical, Send, Home, MessageCircle, Users, Heart, Bell, Plus, X, Paperclip, Check, CheckCheck, Reply, Forward, FileText, Play, Sticker, Smile, Download } from 'lucide-react';
 import EmojiPicker from 'emoji-picker-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from './context/AuthContext.jsx';
@@ -541,6 +541,35 @@ const ChatInterface = () => {
     }
   };
 
+  const handleDownload = async (url, filename) => {
+    try {
+      console.log('Attempting download:', url);
+      const response = await fetch(url);
+      if (!response.ok) throw new Error('Network response was not ok');
+      const blob = await response.blob();
+      const blobUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.download = filename || 'download';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(blobUrl);
+    } catch (error) {
+      console.error('Download failed:', error);
+      // Fallback: Create a direct download link and click it
+      // This is better than window.open as it respects the download attribute if possible
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename || 'download';
+      link.target = '_blank'; // Fail-safe to new tab if download is blocked
+      link.rel = 'noopener noreferrer';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+  };
+
   const scrollToBottom = () => {
     setTimeout(() => {
       messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -921,18 +950,90 @@ const ChatInterface = () => {
                     )}
 
                     {message.type === 'image' && (
-                      <img src={message.media_url} alt="Shared" style={styles.mediaImage} />
+                      <div className="media-container" style={{ position: 'relative', display: 'inline-block' }}>
+                        <img src={message.media_url} alt="Shared" style={styles.mediaImage} />
+                        <button
+                          className="download-btn"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDownload(message.media_url, `image-${message.id}.jpg`);
+                          }}
+                          style={{
+                            position: 'absolute',
+                            bottom: '8px',
+                            right: '8px',
+                            background: 'rgba(0,0,0,0.6)',
+                            border: 'none',
+                            borderRadius: '50%',
+                            padding: '6px',
+                            cursor: 'pointer',
+                            color: 'white',
+                            zIndex: 10,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center'
+                          }}
+                          title="Download"
+                        >
+                          <Download size={16} />
+                        </button>
+                      </div>
                     )}
 
                     {message.type === 'video' && (
-                      <video src={message.media_url} controls style={styles.mediaVideo} />
+                      <div className="media-container" style={{ position: 'relative', display: 'inline-block' }}>
+                        <video src={message.media_url} controls style={styles.mediaVideo} />
+                        <button
+                          className="download-btn"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDownload(message.media_url, `video-${message.id}.mp4`);
+                          }}
+                          style={{
+                            position: 'absolute',
+                            top: '8px',
+                            right: '8px',
+                            background: 'rgba(0,0,0,0.6)',
+                            border: 'none',
+                            borderRadius: '50%',
+                            padding: '6px',
+                            cursor: 'pointer',
+                            color: 'white',
+                            zIndex: 10,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center'
+                          }}
+                          title="Download"
+                        >
+                          <Download size={16} />
+                        </button>
+                      </div>
                     )}
 
                     {message.type === 'document' && (
-                      <a href={message.media_url} target="_blank" rel="noopener noreferrer" style={styles.mediaDoc}>
-                        <FileText size={24} />
-                        <span>{message.message || 'Document'}</span>
-                      </a>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <a href={message.media_url} target="_blank" rel="noopener noreferrer" style={styles.mediaDoc}>
+                          <FileText size={24} />
+                          <span>{message.message || 'Document'}</span>
+                        </a>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDownload(message.media_url, message.message || `document-${message.id}`);
+                          }}
+                          style={{
+                            background: 'transparent',
+                            border: 'none',
+                            cursor: 'pointer',
+                            color: message.isOwn ? 'rgba(255,255,255,0.8)' : '#6b7280',
+                            padding: '4px'
+                          }}
+                          title="Download"
+                        >
+                          <Download size={18} />
+                        </button>
+                      </div>
                     )}
 
                     {message.type === 'gif' && (

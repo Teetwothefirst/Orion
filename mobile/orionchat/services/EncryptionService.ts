@@ -8,7 +8,7 @@ import { SignalStore } from './SignalStore';
 import { api } from './api';
 
 // Polyfill for TextEncoder/Decoder if not available in RN environment
-import 'fast-text-encoding';
+// Polyfill for TextEncoder/Decoder handled in _layout.tsx
 
 class EncryptionService {
     private store: SignalStore;
@@ -20,6 +20,13 @@ class EncryptionService {
     }
 
     async initialize(userId: number) {
+        // Sanity check for crypto polyfill
+        if (!crypto || !crypto.getRandomValues) {
+            console.error('CRITICAL: crypto.getRandomValues is NOT available!');
+        } else {
+            console.log('crypto.getRandomValues is available.');
+        }
+
         if (this.initialized) return;
         this.userId = userId;
 
@@ -73,8 +80,12 @@ class EncryptionService {
                 },
                 oneTimePreKeys
             });
-        } catch (error) {
+        } catch (error: any) {
             console.error('Error uploading keys to server:', error);
+            if (error.response) {
+                console.error('Server Response Status:', error.response.status);
+                console.error('Server Response Data:', JSON.stringify(error.response.data, null, 2));
+            }
         }
     }
 

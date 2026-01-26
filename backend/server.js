@@ -41,6 +41,38 @@ io.on('connection', (socket) => {
     chatSocket(io, socket);
 });
 
+// Scheduler for scheduled messages
+setInterval(() => {
+    const now = new Date().toISOString();
+    db.all(`SELECT * FROM messages WHERE status = 'scheduled' AND scheduled_for <= ?`, [now], (err, messages) => {
+        if (err) {
+            console.error('Error checking scheduled messages:', err);
+            return;
+        }
+        messages.forEach(msg => {
+            // Update status to sent
+            db.run(`UPDATE messages SET status = 'sent', scheduled_for = NULL WHERE id = ?`, [msg.id], (updateErr) => {
+                if (!updateErr) {
+                    console.log(`Sending scheduled message ${msg.id}`);
+                    const fetchSql = `
+                        SELECT m.*, u.username, u.avatar,
+                               r.content as reply_content, r.sender_id as reply_sender_id
+                        FROM messages m
+                        JOIN users u ON m.sender_id = u.id
+                        LEFT JOIN messages r ON m.reply_to_id = r.id
+                        WHERE m.id = ?
+                    `;
+                    db.get(fetchSql, [msg.id], (fetchErr, fullMsg) => {
+                        if (!fetchErr && fullMsg) {
+                            io.to(fullMsg.chat_id).emit('receive_message', fullMsg);
+                        }
+                    });
+                }
+            });
+        });
+    });
+}, 60000); // Check every minute
+
 const PORT = process.env.PORT || 3001;
 
 server.listen(PORT, () => {

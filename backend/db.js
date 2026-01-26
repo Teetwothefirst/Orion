@@ -211,7 +211,8 @@ const initDb = () => {
                 "ALTER TABLE chats ADD COLUMN invite_code TEXT",
                 "CREATE UNIQUE INDEX IF NOT EXISTS idx_chats_invite_code ON chats(invite_code)",
 
-                "ALTER TABLE chat_participants ADD COLUMN role TEXT DEFAULT 'member'"
+                "ALTER TABLE chat_participants ADD COLUMN role TEXT DEFAULT 'member'",
+                "ALTER TABLE messages ADD COLUMN scheduled_for TIMESTAMP"
             ];
 
             migrations.forEach(m => {

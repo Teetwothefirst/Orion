@@ -479,4 +479,49 @@ router.get('/:id/participants', (req, res) => {
     });
 });
 
+// Delete a chat (Group only, Admin/Owner only)
+router.delete('/:id', (req, res) => {
+    const chatId = req.params.id;
+    const adminId = req.query.adminId;
+
+    if (!adminId) {
+        return res.status(400).send("adminId is required.");
+    }
+
+    // Check permissions
+    db.get(`SELECT role FROM chat_participants WHERE chat_id = ? AND user_id = ?`, [chatId, adminId], (err, participant) => {
+        if (err || !participant || (participant.role !== 'admin' && participant.role !== 'owner')) {
+            return res.status(403).send("Permission denied. Only admins or owners can delete the group.");
+        }
+
+        // Notify participants before deletion
+        req.io.to(chatId.toString()).emit('group_deleted', { chatId: parseInt(chatId) });
+
+        // Manual cascading deletion
+        db.serialize(() => {
+            db.run(`BEGIN TRANSACTION`);
+
+            // 1. Delete message reactions
+            db.run(`DELETE FROM message_reactions WHERE message_id IN (SELECT id FROM messages WHERE chat_id = ?)`, [chatId]);
+
+            // 2. Delete messages
+            db.run(`DELETE FROM messages WHERE chat_id = ?`, [chatId]);
+
+            // 3. Delete participants
+            db.run(`DELETE FROM chat_participants WHERE chat_id = ?`, [chatId]);
+
+            // 4. Delete the chat itself
+            db.run(`DELETE FROM chats WHERE id = ?`, [chatId], (err) => {
+                if (err) {
+                    db.run(`ROLLBACK`);
+                    console.error('Error deleting chat:', err);
+                    return res.status(500).send("Error deleting chat.");
+                }
+                db.run(`COMMIT`);
+                res.status(200).send({ message: "Chat deleted successfully" });
+            });
+        });
+    });
+});
+
 module.exports = router;

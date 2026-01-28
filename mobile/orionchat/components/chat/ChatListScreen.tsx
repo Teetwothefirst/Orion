@@ -5,6 +5,7 @@ import { useRouter } from 'expo-router';
 import { useAuth } from '@/context/AuthContext';
 import { api, socket } from '@/services/api';
 import NewChatModal from './NewChatModal';
+import { localDb } from '@/services/LocalDatabaseService';
 
 const { width } = Dimensions.get('window');
 
@@ -21,6 +22,8 @@ export default function ChatListScreen() {
 
     useEffect(() => {
         if (user) {
+            // Load from cache first
+            loadCachedChats();
             fetchChats();
 
             socket.on('user_status', (data) => {
@@ -77,10 +80,32 @@ export default function ChatListScreen() {
         }
     };
 
+    const loadCachedChats = async () => {
+        const cached = await localDb.getCachedChats();
+        if (cached.length > 0) {
+            setChats(cached);
+            setLoading(false);
+        }
+    };
+
     const fetchChats = async () => {
         try {
             const response = await api.get(`/chats?userId=${user?.id}`);
-            setChats(response.data);
+            const fetchedChats = response.data;
+            setChats(fetchedChats);
+
+            // Background update local cache
+            localDb.saveChats(fetchedChats.map((c: any) => ({
+                id: c.id,
+                type: c.type,
+                name: c.name,
+                updated_at: c.updated_at,
+                invite_code: c.invite_code,
+                other_user_id: c.other_user_id,
+                last_message: c.last_message,
+                last_message_type: c.last_message_type,
+                last_message_time: c.last_message_time
+            })));
         } catch (error) {
             console.error('Error fetching chats:', error);
         } finally {

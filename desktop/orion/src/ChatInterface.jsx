@@ -261,6 +261,14 @@ const ChatInterface = () => {
       }));
     });
 
+    socket.on('group_deleted', (data) => {
+      if (selectedContact && data.chatId === selectedContact.id) {
+        alert('This group has been deleted by an admin.');
+        setSelectedContact(null);
+      }
+      fetchContacts();
+    });
+
     if (user) {
       socket.emit('user_online', user.id);
       setProfileForm({ username: user.username, bio: user.bio || '', avatar: user.avatar });
@@ -381,6 +389,17 @@ const ChatInterface = () => {
       fetchParticipants(selectedContact.id);
     } catch (error) {
       alert(error.response?.data || 'Error updating role');
+    }
+  };
+
+  const handleDeleteGroup = async () => {
+    if (!window.confirm('Are you sure you want to permanently delete this group? This action cannot be undone.')) return;
+    try {
+      await api.delete(`/chats/${selectedContact.id}?adminId=${user.id}`);
+      setShowGroupInfo(false);
+      // Socket event will handle redirect and list refresh
+    } catch (error) {
+      alert(error.response?.data || 'Error deleting group');
     }
   };
 
@@ -1733,7 +1752,7 @@ const ChatInterface = () => {
                 )}
               </div>
 
-              <div style={{ padding: '16px' }}>
+              <div style={{ padding: '16px', overflow: 'auto'}}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
                   <h4 style={{ fontSize: '14px', color: '#6b7280', margin: 0, textTransform: 'uppercase' }}>
                     Participants ({participants.length})
@@ -1784,6 +1803,30 @@ const ChatInterface = () => {
                     </div>
                   ))}
                 </div>
+
+                {(myRole === 'owner' || myRole === 'admin') && (
+                  <button
+                    style={{
+                      width: '100%',
+                      marginTop: '24px',
+                      padding: '12px',
+                      backgroundColor: '#fee2e2',
+                      color: '#ef4444',
+                      border: 'none',
+                      borderRadius: '8px',
+                      cursor: 'pointer',
+                      fontWeight: 'bold',
+                      fontSize: '14px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '8px'
+                    }}
+                    onClick={handleDeleteGroup}
+                  >
+                    Delete Group
+                  </button>
+                )}
               </div>
             </div>
           </div>

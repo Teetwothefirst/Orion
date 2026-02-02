@@ -1586,7 +1586,7 @@ const ChatInterface = () => {
                 <h2 style={styles.modalTitle}>Edit Profile</h2>
                 <X size={24} style={{ cursor: 'pointer', color: '#6b7280' }} onClick={() => setShowProfileModal(false)} />
               </div>
-              <form onSubmit={handleUpdateProfile} style={{ padding: '16px', overflow: 'auto' }}>
+              <form onSubmit={handleUpdateProfile} style={{ padding: '20px', overflowY: 'auto', margin: '5px', overflowX: 'hidden' }}>
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: '20px' }}>
                   <div
                     style={{ ...styles.userAvatar, width: '80px', height: '80px', fontSize: '32px', cursor: 'pointer', marginBottom: '10px' }}
@@ -2110,7 +2110,7 @@ const styles = {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: '16px',
+    padding: '22px',
     borderBottom: '1px solid #e5e7eb'
   },
   logout: {

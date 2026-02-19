@@ -11,4 +11,16 @@ export default defineConfig({
       "@": path.resolve(__dirname, "./src"),
     },
   },
+  server: {
+    proxy: {
+      '/api': {
+        target: 'https://orion-3.onrender.com',
+        changeOrigin: true,
+        secure: false,
+        headers: {
+          Origin: 'https://teetwothefirst.github.io'
+        }
+      },
+    },
+  },
 })

@@ -829,7 +829,14 @@ export default function ChatRoomScreen() {
                                 {chatInfo?.invite_code && (
                                     <TouchableOpacity
                                         style={styles.inviteLinkContainer}
-                                        onPress={() => Alert.alert('Invite Code', chatInfo.invite_code)}
+                                        onPress={() => {
+                                            if (Platform.OS === 'web' && navigator?.clipboard) {
+                                                navigator.clipboard.writeText(chatInfo.invite_code);
+                                                Alert.alert('Copied!', `Invite code "${chatInfo.invite_code}" copied to clipboard.`);
+                                            } else {
+                                                Alert.alert('Invite Code', chatInfo.invite_code);
+                                            }
+                                        }}
                                     >
                                         <Text style={styles.inviteLinkText}>Invite Code: {chatInfo.invite_code}</Text>
                                         <Ionicons name="copy-outline" size={16} color="#007AFF" />

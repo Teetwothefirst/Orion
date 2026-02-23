@@ -127,14 +127,21 @@ export default function ChatListScreen() {
 
     const renderItem = ({ item }: { item: any }) => {
         const isOnline = item.type === 'private' && onlineUsers[item.other_user_id]?.status === 'online';
+        const isGroup = item.type !== 'private';
 
         return (
             <TouchableOpacity style={styles.chatItem} onPress={() => handleChatPress(item.id)}>
                 <View style={styles.avatarContainer}>
-                    <Image
-                        source={{ uri: item.avatar || 'https://i.pravatar.cc/100' }}
-                        style={styles.chatAvatar}
-                    />
+                    {isGroup ? (
+                        <View style={[styles.chatAvatar, styles.groupAvatarIcon]}>
+                            <Ionicons name="people" size={26} color="#fff" />
+                        </View>
+                    ) : (
+                        <Image
+                            source={{ uri: item.avatar || 'https://i.pravatar.cc/100' }}
+                            style={styles.chatAvatar}
+                        />
+                    )}
                     {isOnline && <View style={styles.onlineDot} />}
                 </View>
                 <View style={styles.chatInfo}>
@@ -221,6 +228,7 @@ export default function ChatListScreen() {
                 visible={showNewChatModal}
                 onClose={() => setShowNewChatModal(false)}
                 onUserSelect={handleStartChat}
+                initialMode={activeTab}
             />
 
             {/* Join Group Modal */}
@@ -308,6 +316,11 @@ const styles = StyleSheet.create({
         height: 50,
         borderRadius: 25,
         backgroundColor: '#333',
+    },
+    groupAvatarIcon: {
+        backgroundColor: '#007AFF',
+        justifyContent: 'center' as const,
+        alignItems: 'center' as const,
     },
     onlineDot: {
         position: 'absolute',

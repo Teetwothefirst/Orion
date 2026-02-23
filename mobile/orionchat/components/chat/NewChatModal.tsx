@@ -15,19 +15,22 @@ interface NewChatModalProps {
     visible: boolean;
     onClose: () => void;
     onUserSelect: (user: User | User[], name?: string, isChannel?: boolean) => void;
+    initialMode?: 'chat' | 'group';
 }
 
-export default function NewChatModal({ visible, onClose, onUserSelect }: NewChatModalProps) {
+export default function NewChatModal({ visible, onClose, onUserSelect, initialMode = 'chat' }: NewChatModalProps) {
     const [searchQuery, setSearchQuery] = useState('');
     const [users, setUsers] = useState<User[]>([]);
     const [selectedUsers, setSelectedUsers] = useState<User[]>([]);
     const [groupName, setGroupName] = useState('');
     const [isChannel, setIsChannel] = useState(false);
     const [loading, setLoading] = useState(false);
+    const [mode, setMode] = useState<'chat' | 'group'>(initialMode);
     const { user: currentUser } = useAuth();
 
     useEffect(() => {
         if (visible) {
+            setMode(initialMode);
             fetchUsers();
         } else {
             setSearchQuery('');
@@ -35,6 +38,7 @@ export default function NewChatModal({ visible, onClose, onUserSelect }: NewChat
             setSelectedUsers([]);
             setGroupName('');
             setIsChannel(false);
+            setMode('chat');
         }
     }, [visible]);
 
@@ -45,10 +49,7 @@ export default function NewChatModal({ visible, onClose, onUserSelect }: NewChat
                 ? `/users/search?q=${searchQuery}&currentUserId=${currentUser?.id}`
                 : `/users?currentUserId=${currentUser?.id}`;
 
-            console.log('Fetching users from:', endpoint);
             const response = await api.get(endpoint);
-            console.log('Users response status:', response.status);
-            console.log('Users found:', response.data.length);
             setUsers(response.data);
         } catch (error) {
             console.error('Error fetching users:', error);
@@ -79,11 +80,18 @@ export default function NewChatModal({ visible, onClose, onUserSelect }: NewChat
     };
 
     const handleSingleUserPress = (user: User) => {
-        if (selectedUsers.length > 0) {
+        if (mode === 'group') {
             toggleUserSelection(user);
         } else {
             onUserSelect(user);
         }
+    };
+
+    const switchMode = (newMode: 'chat' | 'group') => {
+        setMode(newMode);
+        setSelectedUsers([]);
+        setGroupName('');
+        setIsChannel(false);
     };
 
     const renderUserItem = ({ item }: { item: User }) => {
@@ -91,8 +99,7 @@ export default function NewChatModal({ visible, onClose, onUserSelect }: NewChat
         return (
             <TouchableOpacity
                 style={[styles.userItem, isSelected && styles.selectedUserItem]}
-                onPress={() => selectedUsers.length > 0 ? toggleUserSelection(item) : handleSingleUserPress(item)}
-                onLongPress={() => toggleUserSelection(item)}
+                onPress={() => handleSingleUserPress(item)}
             >
                 <Image
                     source={{ uri: item.avatar || 'https://i.pravatar.cc/100' }}
@@ -102,8 +109,12 @@ export default function NewChatModal({ visible, onClose, onUserSelect }: NewChat
                     <Text style={styles.username}>{item.username}</Text>
                     <Text style={styles.email}>{item.email}</Text>
                 </View>
-                {isSelected ? (
-                    <Ionicons name="checkmark-circle" size={24} color="#007AFF" />
+                {mode === 'group' ? (
+                    <Ionicons
+                        name={isSelected ? "checkmark-circle" : "ellipse-outline"}
+                        size={24}
+                        color={isSelected ? "#007AFF" : "#555"}
+                    />
                 ) : (
                     <Ionicons name="chatbubble-outline" size={24} color="#007AFF" />
                 )}
@@ -122,26 +133,50 @@ export default function NewChatModal({ visible, onClose, onUserSelect }: NewChat
                 behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
                 style={styles.container}
             >
+                {/* Header */}
                 <View style={styles.header}>
-                    <Text style={styles.title}>New Chat</Text>
+                    <Text style={styles.title}>
+                        {mode === 'group' ? 'New Group' : 'New Chat'}
+                    </Text>
                     <TouchableOpacity onPress={onClose} style={styles.closeButton}>
                         <Ionicons name="close" size={24} color="#007AFF" />
                     </TouchableOpacity>
                 </View>
 
-                {/* Group Mode Toggle/Header */}
-                {selectedUsers.length > 0 && (
+                {/* Mode Toggle */}
+                <View style={styles.modeToggleContainer}>
+                    <TouchableOpacity
+                        style={[styles.modeButton, mode === 'chat' && styles.modeButtonActive]}
+                        onPress={() => switchMode('chat')}
+                    >
+                        <Ionicons name="chatbubble-outline" size={18} color={mode === 'chat' ? '#fff' : '#888'} />
+                        <Text style={[styles.modeButtonText, mode === 'chat' && styles.modeButtonTextActive]}>
+                            New Chat
+                        </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                        style={[styles.modeButton, mode === 'group' && styles.modeButtonActive]}
+                        onPress={() => switchMode('group')}
+                    >
+                        <Ionicons name="people-outline" size={18} color={mode === 'group' ? '#fff' : '#888'} />
+                        <Text style={[styles.modeButtonText, mode === 'group' && styles.modeButtonTextActive]}>
+                            New Group
+                        </Text>
+                    </TouchableOpacity>
+                </View>
+
+                {/* Group Options (visible when in group mode) */}
+                {mode === 'group' && (
                     <View style={styles.groupHeader}>
-                        <Text style={styles.selectedCount}>{selectedUsers.length} selected</Text>
                         <TextInput
                             style={styles.groupNameInput}
-                            placeholder="Group/Channel Name (Optional)"
+                            placeholder="Group Name"
                             placeholderTextColor="#666"
                             value={groupName}
                             onChangeText={setGroupName}
                         />
                         <TouchableOpacity
-                            style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}
+                            style={styles.channelToggle}
                             onPress={() => setIsChannel(!isChannel)}
                         >
                             <Ionicons
@@ -149,14 +184,23 @@ export default function NewChatModal({ visible, onClose, onUserSelect }: NewChat
                                 size={20}
                                 color={isChannel ? "#007AFF" : "#666"}
                             />
-                            <Text style={{ color: 'white', fontSize: 14 }}>Create as Public Channel</Text>
+                            <Text style={styles.channelToggleText}>Create as Public Channel</Text>
                         </TouchableOpacity>
-                        <TouchableOpacity style={styles.createButton} onPress={handleCreateGroup}>
-                            <Text style={styles.createButtonText}>Create {isChannel ? 'Channel' : 'Group'}</Text>
-                        </TouchableOpacity>
+                        {selectedUsers.length > 0 && (
+                            <View style={styles.selectedInfo}>
+                                <Text style={styles.selectedCount}>{selectedUsers.length} member{selectedUsers.length !== 1 ? 's' : ''} selected</Text>
+                                <TouchableOpacity style={styles.createButton} onPress={handleCreateGroup}>
+                                    <Ionicons name="checkmark" size={18} color="white" />
+                                    <Text style={styles.createButtonText}>
+                                        Create {isChannel ? 'Channel' : 'Group'}
+                                    </Text>
+                                </TouchableOpacity>
+                            </View>
+                        )}
                     </View>
                 )}
 
+                {/* Search */}
                 <View style={styles.searchContainer}>
                     <Ionicons name="search" size={20} color="#666" style={styles.searchIcon} />
                     <TextInput
@@ -170,6 +214,7 @@ export default function NewChatModal({ visible, onClose, onUserSelect }: NewChat
                     />
                 </View>
 
+                {/* User List */}
                 {loading ? (
                     <View style={styles.loadingContainer}>
                         <ActivityIndicator size="large" color="#007AFF" />
@@ -213,11 +258,90 @@ const styles = StyleSheet.create({
     closeButton: {
         padding: 4,
     },
+    modeToggleContainer: {
+        flexDirection: 'row',
+        marginHorizontal: 16,
+        marginTop: 12,
+        marginBottom: 4,
+        backgroundColor: '#1E1E1E',
+        borderRadius: 12,
+        padding: 4,
+    },
+    modeButton: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: 10,
+        borderRadius: 10,
+        gap: 6,
+    },
+    modeButtonActive: {
+        backgroundColor: '#007AFF',
+    },
+    modeButtonText: {
+        color: '#888',
+        fontSize: 14,
+        fontWeight: '600',
+    },
+    modeButtonTextActive: {
+        color: 'white',
+    },
+    groupHeader: {
+        padding: 16,
+        paddingTop: 12,
+        borderBottomWidth: 1,
+        borderBottomColor: '#2C2C2C',
+        gap: 10,
+    },
+    groupNameInput: {
+        backgroundColor: '#1E1E1E',
+        padding: 12,
+        borderRadius: 10,
+        color: 'white',
+        fontSize: 16,
+        borderWidth: 1,
+        borderColor: '#333',
+    },
+    channelToggle: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+    },
+    channelToggleText: {
+        color: '#ccc',
+        fontSize: 14,
+    },
+    selectedInfo: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+    },
+    selectedCount: {
+        color: '#007AFF',
+        fontWeight: '600',
+        fontSize: 14,
+    },
+    createButton: {
+        flexDirection: 'row',
+        backgroundColor: '#007AFF',
+        paddingHorizontal: 16,
+        paddingVertical: 10,
+        borderRadius: 10,
+        alignItems: 'center',
+        gap: 6,
+    },
+    createButtonText: {
+        color: 'white',
+        fontWeight: 'bold',
+        fontSize: 14,
+    },
     searchContainer: {
         flexDirection: 'row',
         alignItems: 'center',
         backgroundColor: '#1E1E1E',
         margin: 16,
+        marginTop: 12,
         paddingHorizontal: 12,
         borderRadius: 10,
         height: 40,
@@ -276,33 +400,5 @@ const styles = StyleSheet.create({
     },
     selectedUserItem: {
         backgroundColor: 'rgba(0, 122, 255, 0.1)',
-    },
-    groupHeader: {
-        padding: 16,
-        borderBottomWidth: 1,
-        borderBottomColor: '#2C2C2C',
-        gap: 12,
-    },
-    selectedCount: {
-        color: '#007AFF',
-        fontWeight: '600',
-    },
-    groupNameInput: {
-        backgroundColor: '#1E1E1E',
-        padding: 12,
-        borderRadius: 8,
-        color: 'white',
-        borderWidth: 1,
-        borderColor: '#333',
-    },
-    createButton: {
-        backgroundColor: '#007AFF',
-        padding: 12,
-        borderRadius: 8,
-        alignItems: 'center',
-    },
-    createButtonText: {
-        color: 'white',
-        fontWeight: 'bold',
     },
 });

@@ -248,7 +248,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ onBackToHome }) => {
                         <div className="p-6 border-b border-gray-800 flex items-center justify-between">
                             <div className="flex items-center gap-4">
                                 <div className={`w-12 h-12 rounded-full flex items-center justify-center font-bold text-lg ${selectedChat.type === 'private' ? 'bg-blue-600/20 text-blue-400' : 'bg-purple-600/20 text-purple-400'}`}>
-                                    {selectedChat.name[0].toUpperCase()}
+                                    {(selectedChat.name || 'C')[0].toUpperCase()}
                                 </div>
                                 <div>
                                     <h3 className="font-bold text-xl">{selectedChat.name}</h3>

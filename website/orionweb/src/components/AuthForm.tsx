@@ -18,9 +18,9 @@ const AuthForm: React.FC<AuthFormProps> = ({ onAuthSuccess }) => {
         setError('');
         setLoading(true);
 
-        const endpoint = isLogin ? '/login' : '/register';
+        const endpoint = isLogin ? '/auth/login' : '/auth/register';
         const body = isLogin
-            ? { username: username, email: username, password }
+            ? { email: username, password } // Backend expects email
             : { username, email, password };
 
         try {
@@ -33,7 +33,7 @@ const AuthForm: React.FC<AuthFormProps> = ({ onAuthSuccess }) => {
             const data = await response.json();
 
             if (response.ok) {
-                onAuthSuccess(data.user, data.sessionId);
+                onAuthSuccess(data.user, data.token);
             } else {
                 setError(data.error || data.message || 'Authentication failed');
             }

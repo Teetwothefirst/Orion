@@ -3,42 +3,46 @@ import { io, Socket } from 'socket.io-client';
 import { API_BASE_URL } from '../lib/config';
 
 export interface User {
-    _id: string;
+    id: number;
     username: string;
     email: string;
+    avatar?: string;
     status: 'online' | 'offline';
 }
 
 export interface Message {
-    senderId: string;
-    receiverId?: string;
-    groupId?: string;
+    id: number;
+    chat_id: number;
+    sender_id: number;
     content: string;
+    type: string;
     timestamp: string;
-    senderUsername?: string;
+    username?: string;
+    avatar?: string;
 }
 
-export interface Group {
-    _id: string;
+export interface Chat {
+    id: number;
     name: string;
-    description: string;
-    members: string[];
-    admin: string;
+    type: 'private' | 'group';
+    other_user_id?: number;
+    last_message?: string;
+    last_message_time?: string;
 }
 
-export const useSocket = (sessionId: string | null) => {
+export const useSocket = (token: string | null) => {
     const socketRef = useRef<Socket | null>(null);
     const [isConnected, setIsConnected] = useState(false);
     const [users, setUsers] = useState<User[]>([]);
-    const [groups, setGroups] = useState<Group[]>([]);
+    const [chats, setChats] = useState<Chat[]>([]);
     const [messages, setMessages] = useState<Message[]>([]);
-    const [typingUsers, setTypingUsers] = useState<Record<string, boolean>>({});
+    const [onlineUsers, setOnlineUsers] = useState<Record<number, string>>({});
 
     useEffect(() => {
-        if (!sessionId) return;
+        if (!token) return;
 
         const socket = io(API_BASE_URL, {
-            auth: { sessionId }
+            query: { token }
         });
 
         socketRef.current = socket;
@@ -46,51 +50,59 @@ export const useSocket = (sessionId: string | null) => {
         socket.on('connect', () => {
             setIsConnected(true);
             console.log('Connected to socket');
+            const savedUser = localStorage.getItem('user');
+            if (savedUser) {
+                const user = JSON.parse(savedUser);
+                socket.emit('user_online', user.id);
+            }
         });
 
         socket.on('disconnect', () => {
             setIsConnected(false);
+            setOnlineUsers({});
             console.log('Disconnected from socket');
         });
 
-        socket.on('users_update', (updatedUsers: User[]) => {
-            setUsers(updatedUsers);
-        });
-
-        socket.on('groups_update', (updatedGroups: Group[]) => {
-            setGroups(updatedGroups);
+        socket.on('user_status', ({ userId, status }: { userId: number; status: string }) => {
+            setOnlineUsers(prev => ({ ...prev, [userId]: status }));
         });
 
         socket.on('receive_message', (message: Message) => {
-            setMessages((prev) => [...prev, message]);
-        });
-
-        socket.on('user_typing', ({ userId, isTyping }: { userId: string; isTyping: boolean }) => {
-            setTypingUsers((prev) => ({ ...prev, [userId]: isTyping }));
+            setMessages((prev) => {
+                // Prevent duplicates
+                if (prev.some(m => m.id === message.id)) return prev;
+                return [...prev, message];
+            });
         });
 
         return () => {
             socket.disconnect();
             socketRef.current = null;
         };
-    }, [sessionId]);
+    }, [token]);
 
-    const sendMessage = useCallback((content: string, receiverId?: string, groupId?: string) => {
+    const joinRoom = useCallback((chatId: number) => {
         if (socketRef.current && isConnected) {
-            socketRef.current.emit('send_message', {
-                receiverId,
-                groupId,
-                content
-            });
+            socketRef.current.emit('join_room', chatId.toString());
         }
     }, [isConnected]);
 
-    const emitTyping = useCallback((isTyping: boolean, receiverId?: string, groupId?: string) => {
+    const leaveRoom = useCallback((chatId: number) => {
         if (socketRef.current && isConnected) {
-            socketRef.current.emit('typing', {
-                isTyping,
-                receiverId,
-                groupId
+            socketRef.current.emit('leave_room', chatId.toString());
+        }
+    }, [isConnected]);
+
+    const sendMessage = useCallback((data: {
+        chatId: number,
+        senderId: number,
+        content: string,
+        type?: string
+    }) => {
+        if (socketRef.current && isConnected) {
+            socketRef.current.emit('send_message', {
+                ...data,
+                type: data.type || 'text'
             });
         }
     }, [isConnected]);
@@ -98,11 +110,14 @@ export const useSocket = (sessionId: string | null) => {
     return {
         isConnected,
         users,
-        groups,
+        setUsers,
+        chats,
+        setChats,
         messages,
         setMessages,
-        typingUsers,
+        onlineUsers,
         sendMessage,
-        emitTyping
+        joinRoom,
+        leaveRoom
     };
 };

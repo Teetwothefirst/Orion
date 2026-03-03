@@ -14,7 +14,7 @@ export default defineConfig({
   server: {
     proxy: {
       '/api': {
-        target: 'https://orion-3.onrender.com',
+        target: 'http://localhost:3001',
         changeOrigin: true,
         secure: false,
         headers: {

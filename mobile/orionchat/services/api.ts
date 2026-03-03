@@ -14,7 +14,7 @@ import { Platform } from 'react-native';
 // Web uses localhost, physical devices use your computer's IP address
 const API_URL = Platform.OS === 'web'
     ? 'http://localhost:3001'
-    : 'http://192.168.0.133:3001';
+    : 'http://localhost:3001'; // Fallback to localhost for now, or use workstation IP
 
 export const api = axios.create({
     baseURL: API_URL,

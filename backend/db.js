@@ -104,7 +104,10 @@ const initDb = () => {
             bio TEXT,
             last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             reset_token TEXT,
-            reset_token_expiry BIGINT
+            reset_token_expiry BIGINT,
+            role TEXT DEFAULT 'buyer', -- 'buyer', 'vendor', 'admin'
+            phone_verified BOOLEAN DEFAULT FALSE,
+            balance DECIMAL(12, 2) DEFAULT 0
         )`,
         `CREATE TABLE IF NOT EXISTS chats (
             id ${isPostgres ? 'SERIAL PRIMARY KEY' : 'INTEGER PRIMARY KEY AUTOINCREMENT'},
@@ -161,6 +164,53 @@ const initDb = () => {
             emoji TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             UNIQUE(message_id, user_id, emoji)
+        )`,
+        `CREATE TABLE IF NOT EXISTS categories (
+            id ${isPostgres ? 'SERIAL PRIMARY KEY' : 'INTEGER PRIMARY KEY AUTOINCREMENT'},
+            name TEXT UNIQUE,
+            icon TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )`,
+        `CREATE TABLE IF NOT EXISTS products (
+            id ${isPostgres ? 'SERIAL PRIMARY KEY' : 'INTEGER PRIMARY KEY AUTOINCREMENT'},
+            vendor_id INTEGER,
+            category_id INTEGER,
+            name TEXT,
+            description TEXT,
+            price DECIMAL(12, 2),
+            unit TEXT, -- 'kg', 'bag', 'ton', etc.
+            location TEXT,
+            image_url TEXT,
+            stock_quantity INTEGER DEFAULT 1,
+            is_available BOOLEAN DEFAULT TRUE,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )`,
+        `CREATE TABLE IF NOT EXISTS orders (
+            id ${isPostgres ? 'SERIAL PRIMARY KEY' : 'INTEGER PRIMARY KEY AUTOINCREMENT'},
+            buyer_id INTEGER,
+            vendor_id INTEGER,
+            total_amount DECIMAL(12, 2),
+            status TEXT DEFAULT 'pending', -- 'pending', 'paid', 'shipped', 'delivered', 'disputed', 'cancelled'
+            escrow_status TEXT DEFAULT 'held', -- 'held', 'released', 'refunded'
+            payment_ref TEXT,
+            delivered_at TIMESTAMP,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )`,
+        `CREATE TABLE IF NOT EXISTS order_items (
+            id ${isPostgres ? 'SERIAL PRIMARY KEY' : 'INTEGER PRIMARY KEY AUTOINCREMENT'},
+            order_id INTEGER,
+            product_id INTEGER,
+            quantity INTEGER,
+            price_at_purchase DECIMAL(12, 2)
+        )`,
+        `CREATE TABLE IF NOT EXISTS reviews (
+            id ${isPostgres ? 'SERIAL PRIMARY KEY' : 'INTEGER PRIMARY KEY AUTOINCREMENT'},
+            order_id INTEGER,
+            reviewer_id INTEGER,
+            reviewee_id INTEGER,
+            rating INTEGER,
+            comment TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )`
     ];
 
@@ -181,6 +231,12 @@ const initDb = () => {
         db.query("ALTER TABLE chats ADD COLUMN IF NOT EXISTS invite_code TEXT UNIQUE").catch(() => { });
         db.query("ALTER TABLE chat_participants ADD COLUMN IF NOT EXISTS id SERIAL PRIMARY KEY").catch(() => { });
         db.query("ALTER TABLE chat_participants ADD COLUMN IF NOT EXISTS role TEXT DEFAULT 'member'").catch(() => { });
+
+        // Marketplace Phase 1 migrations for Postgres
+        db.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS role TEXT DEFAULT 'buyer'").catch(() => { });
+        db.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS phone_verified BOOLEAN DEFAULT FALSE").catch(() => { });
+        db.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS balance DECIMAL(12, 2) DEFAULT 0").catch(() => { });
+        db.query("ALTER TABLE orders ADD COLUMN IF NOT EXISTS delivered_at TIMESTAMP").catch(() => { });
     } else {
         db.serialize(() => {
             queries.forEach((q, index) => {
@@ -212,7 +268,11 @@ const initDb = () => {
                 "CREATE UNIQUE INDEX IF NOT EXISTS idx_chats_invite_code ON chats(invite_code)",
 
                 "ALTER TABLE chat_participants ADD COLUMN role TEXT DEFAULT 'member'",
-                "ALTER TABLE messages ADD COLUMN scheduled_for TIMESTAMP"
+                "ALTER TABLE messages ADD COLUMN scheduled_for TIMESTAMP",
+                "ALTER TABLE users ADD COLUMN role TEXT DEFAULT 'buyer'",
+                "ALTER TABLE users ADD COLUMN phone_verified BOOLEAN DEFAULT FALSE",
+                "ALTER TABLE users ADD COLUMN balance DECIMAL(12, 2) DEFAULT 0",
+                "ALTER TABLE orders ADD COLUMN delivered_at TIMESTAMP"
             ];
 
             migrations.forEach(m => {

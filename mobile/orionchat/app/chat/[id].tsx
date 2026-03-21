@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, FlatList, KeyboardAvoidingView, Platform, Image, ActivityIndicator, Modal, ScrollView, Animated } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, FlatList, KeyboardAvoidingView, Platform, Image, ActivityIndicator, Modal, ScrollView, Animated, Linking } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Swipeable, RectButton } from 'react-native-gesture-handler';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -10,14 +10,18 @@ import * as ImagePicker from 'expo-image-picker';
 import { Video, ResizeMode } from 'expo-av';
 import { Alert } from 'react-native';
 import MediaPicker from '@/components/chat/MediaPicker';
+import { Audio } from 'expo-av';
+import * as Haptics from 'expo-haptics';
 import { encryptionService } from '@/services/EncryptionService';
 import { localDb } from '@/services/LocalDatabaseService';
+import ProductCard from '@/components/marketplace/ProductCard';
 
 interface Message {
     id: number;
     content: string;
     sender_id: number;
-    type?: 'text' | 'image' | 'video' | 'document' | 'gif' | 'sticker' | 'encrypted';
+    type?: 'text' | 'image' | 'video' | 'document' | 'gif' | 'sticker' | 'encrypted' | 'product';
+    product_data?: any;
     media_url?: string;
     status?: 'sent' | 'delivered' | 'read';
     reply_to_id?: number;
@@ -53,6 +57,8 @@ export default function ChatRoomScreen() {
     const [potentialMembers, setPotentialMembers] = useState<any[]>([]);
     const [showReactionPicker, setShowReactionPicker] = useState(false);
     const [selectedMessageForReaction, setSelectedMessageForReaction] = useState<Message | null>(null);
+    const [recording, setRecording] = useState<Audio.Recording | null>(null);
+    const [isRecording, setIsRecording] = useState(false);
     const flatListRef = useRef<FlatList>(null);
     const { user } = useAuth();
     const router = useRouter();
@@ -333,7 +339,11 @@ export default function ChatRoomScreen() {
         let content = newMessage;
         let type = overrideData.type || 'text';
 
-        // E2EE for private chats
+        // Agricultural Keywords for AI Search Interception
+        const agKeywords = ['find', 'buy', 'search', 'maize', 'yam', 'rice', 'beans', 'poultry', 'cow', 'fertilizer', 'tractor', 'farm', 'price of'];
+        const isAgQuery = type === 'text' && agKeywords.some(kw => content.toLowerCase().includes(kw));
+
+        // E2EE for private chats (only if not an intercepted AI query for now, or ensure AI query is also encrypted if needed)
         if (chatInfo?.type === 'private' && type === 'text' && !overrideData.media_url) {
             try {
                 const encrypted = await encryptionService.encryptMessage(chatInfo.other_user_id, content);
@@ -359,6 +369,46 @@ export default function ChatRoomScreen() {
 
         socket.emit('send_message', messageData);
         setNewMessage('');
+
+        // If it's an agricultural query, trigger AI discovery in the background
+        if (isAgQuery) {
+            try {
+                const response = await api.post('/marketplace/ai-search', { query: newMessage });
+                if (response.data && response.data.length > 0) {
+                    // Small delay to let the user's message appear first
+                    setTimeout(() => {
+                        response.data.forEach((product: any) => {
+                            socket.emit('send_message', {
+                                chatId: id,
+                                senderId: user.id, // In Phase 3, this could be a "Bot" sender
+                                content: `Found ${product.name} at ${product.location}`,
+                                type: 'product',
+                                product_data: product
+                            });
+                        });
+                    }, 800);
+                }
+            } catch (err) {
+                console.error('AI Discovery failed:', err);
+            }
+        }
+    };
+    
+    // Phase 4: Transactional Handlers
+    const handleCheckout = async (product: any) => {
+        try {
+            const response = await api.post('/marketplace/checkout', {
+                productId: product.id,
+                quantity: 1
+            });
+            
+            if (response.data.checkout_url) {
+                Linking.openURL(response.data.checkout_url);
+            }
+        } catch (err: any) {
+            console.error('Checkout failed:', err);
+            Alert.alert('Error', err.response?.data?.error || 'Failed to initiate checkout. Please try again.');
+        }
     };
 
     const handlePickImage = async () => {
@@ -396,6 +446,67 @@ export default function ChatRoomScreen() {
             } finally {
                 setIsUploading(false);
             }
+        }
+    };
+
+    const startRecording = async () => {
+        try {
+            const permission = await Audio.requestPermissionsAsync();
+            if (permission.status !== 'granted') return;
+
+            await Audio.setAudioModeAsync({
+                allowsRecordingIOS: true,
+                playsInSilentModeIOS: true,
+            });
+
+            const { recording } = await Audio.Recording.createAsync(
+                Audio.RecordingOptionsPresets.HIGH_QUALITY
+            );
+            setRecording(recording);
+            setIsRecording(true);
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+        } catch (err) {
+            console.error('Failed to start recording', err);
+        }
+    };
+
+    const stopRecording = async () => {
+        if (!recording) return;
+        setIsRecording(false);
+        await recording.stopAndUnloadAsync();
+        const uri = recording.getURI();
+        setRecording(null);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+
+        if (uri) {
+            handleVoiceSearch(uri);
+        }
+    };
+
+    const handleVoiceSearch = async (uri: string) => {
+        const formData = new FormData();
+        // @ts-ignore
+        formData.append('file', {
+            uri: uri,
+            type: 'audio/m4a',
+            name: 'recording.m4a',
+        });
+
+        setIsUploading(true);
+        try {
+            const response = await api.post('/marketplace/voice-search', formData, {
+                headers: { 'Content-Type': 'multipart/form-data' }
+            });
+
+            if (response.data.transcription) {
+                setNewMessage(response.data.transcription);
+                Alert.alert('Voice Transcription', `Searching for: "${response.data.transcription}"`);
+            }
+        } catch (error) {
+            console.error('Voice search failed:', error);
+            Alert.alert('Error', 'Voice transcription failed. Please try again.');
+        } finally {
+            setIsUploading(false);
         }
     };
 
@@ -614,6 +725,13 @@ export default function ChatRoomScreen() {
                             />
                         )}
 
+                        {item.type === 'product' && item.product_data && (
+                            <ProductCard 
+                                product={item.product_data} 
+                                onBuy={() => handleCheckout(item.product_data)}
+                            />
+                        )}
+
                         {item.type === 'text' && (
                             <Text style={[styles.messageText, isMyMessage ? styles.myMessageText : styles.otherMessageText]}>
                                 {item.content}
@@ -751,9 +869,25 @@ export default function ChatRoomScreen() {
                     >
                         <Ionicons name="happy-outline" size={24} color="#007AFF" />
                     </TouchableOpacity>
-                    <TouchableOpacity style={styles.sendButton} onPress={() => sendMessage()}>
-                        <Ionicons name="send" size={24} color="#007AFF" />
-                    </TouchableOpacity>
+
+                    {newMessage.trim().length > 0 ? (
+                        <TouchableOpacity style={styles.sendButton} onPress={() => sendMessage()}>
+                            <Ionicons name="send" size={24} color="#007AFF" />
+                        </TouchableOpacity>
+                    ) : (
+                        <TouchableOpacity 
+                            style={styles.sendButton} 
+                            onLongPress={startRecording}
+                            onPressOut={stopRecording}
+                            delayLongPress={100}
+                        >
+                            <Ionicons 
+                                name={isRecording ? "mic" : "mic-outline"} 
+                                size={24} 
+                                color={isRecording ? "#FF3B30" : "#007AFF"} 
+                            />
+                        </TouchableOpacity>
+                    )}
                 </View>
 
                 <Modal

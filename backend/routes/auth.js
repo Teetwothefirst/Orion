@@ -7,6 +7,21 @@ const crypto = require('crypto');
 const router = express.Router();
 const JWT_SECRET = 'your_jwt_secret_key'; // In production, use environment variable
 
+// Middleware to verify token
+const authenticateToken = (req, res, next) => {
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1];
+
+    if (!token) return res.status(401).send({ auth: false, message: 'No token provided.' });
+
+    jwt.verify(token, JWT_SECRET, (err, decoded) => {
+        if (err) return res.status(500).send({ auth: false, message: 'Failed to authenticate token.' });
+
+        req.user = decoded;
+        next();
+    });
+};
+
 // Register
 router.post('/register', (req, res) => {
     const { username, email, password } = req.body;
@@ -111,4 +126,7 @@ router.post('/reset-password', (req, res) => {
     });
 });
 
-module.exports = router;
+module.exports = {
+    router,
+    authenticateToken
+};

@@ -9,12 +9,24 @@ export const AuthProvider = ({ children }) => {
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState(null);
 
+    React.useEffect(() => {
+        const savedToken = localStorage.getItem('token');
+        const savedUser = localStorage.getItem('user');
+        if (savedToken && savedUser) {
+            setToken(savedToken);
+            setUser(JSON.parse(savedUser));
+            socket.connect();
+        }
+    }, []);
+
     const login = async (email, password) => {
         setIsLoading(true);
         setError(null);
         try {
             const response = await api.post('/auth/login', { email, password });
             const { token, user } = response.data;
+            localStorage.setItem('token', token);
+            localStorage.setItem('user', JSON.stringify(user));
             setToken(token);
             setUser(user);
             socket.connect();
@@ -38,6 +50,8 @@ export const AuthProvider = ({ children }) => {
         try {
             const response = await api.post('/auth/register', { username: name, email, password });
             const { token, user } = response.data;
+            localStorage.setItem('token', token);
+            localStorage.setItem('user', JSON.stringify(user));
             setToken(token);
             setUser(user);
             socket.connect();
@@ -94,11 +108,29 @@ export const AuthProvider = ({ children }) => {
     const logout = () => {
         setUser(null);
         setToken(null);
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
         socket.disconnect();
     };
 
+    const becomeVendor = async () => {
+        setIsLoading(true);
+        setError(null);
+        try {
+            const response = await api.post('/marketplace/vendor-signup');
+            setUser(prev => ({ ...prev, role: 'vendor' }));
+            return true;
+        } catch (error) {
+            console.error('Vendor signup error:', error);
+            setError(error.response?.data?.error || 'Failed to upgrade to vendor');
+            return false;
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
     return (
-        <AuthContext.Provider value={{ user, token, login, register, logout, forgotPassword, resetPassword, isLoading, error }}>
+        <AuthContext.Provider value={{ user, token, login, register, logout, forgotPassword, resetPassword, becomeVendor, isLoading, error }}>
             {children}
         </AuthContext.Provider>
     );

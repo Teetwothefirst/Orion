@@ -4,12 +4,14 @@ const http = require('http');
 const { Server } = require('socket.io');
 const cors = require('cors');
 const db = require('./db');
-const authRoutes = require('./routes/auth');
+const { router: authRoutes } = require('./routes/auth');
 const chatRoutes = require('./routes/chat');
 const usersRoutes = require('./routes/users');
 const supportRoutes = require('./routes/support');
+const marketplaceRoutes = require('./routes/marketplace');
 const chatSocket = require('./sockets/chatSocket');
 const { sendBugReportEmail } = require('./utils/mailer');
+const EscrowService = require('./services/EscrowService');
 
 const app = express();
 const server = http.createServer(app);
@@ -35,6 +37,7 @@ app.use('/chats', chatRoutes);
 app.use('/users', usersRoutes);
 app.use('/support', supportRoutes);
 app.use('/keys', require('./routes/keys'));
+app.use('/marketplace', marketplaceRoutes);
 
 // Socket.io
 io.on('connection', (socket) => {
@@ -72,6 +75,9 @@ setInterval(() => {
         });
     });
 }, 60000); // Check every minute
+
+// Start Escrow Service
+EscrowService.startStatusChecker();
 
 const PORT = process.env.PORT || 3001;
 

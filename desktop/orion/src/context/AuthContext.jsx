@@ -118,7 +118,9 @@ export const AuthProvider = ({ children }) => {
         setError(null);
         try {
             const response = await api.post('/marketplace/vendor-signup');
-            setUser(prev => ({ ...prev, role: 'vendor' }));
+            const updatedUser = { ...user, role: 'vendor' };
+            setUser(updatedUser);
+            localStorage.setItem('user', JSON.stringify(updatedUser));
             return true;
         } catch (error) {
             console.error('Vendor signup error:', error);

@@ -9,6 +9,7 @@ interface User {
     avatar?: string;
     bio?: string;
     last_seen?: string;
+    role: 'buyer' | 'vendor' | 'admin';
 }
 
 interface AuthContextType {

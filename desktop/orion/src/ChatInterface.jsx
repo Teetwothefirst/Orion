@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Search, MoreHorizontal, MoreVertical, Send, Home, MessageCircle, Users, Heart, Bell, Plus, X, Paperclip, Check, CheckCheck, Reply, Forward, FileText, Play, Sticker, Smile, Download, Palette, Info, Clock } from 'lucide-react';
+import { Search, MoreHorizontal, MoreVertical, Send, Home, MessageCircle, Users, Heart, Bell, Plus, X, Paperclip, Check, CheckCheck, Reply, Forward, FileText, Play, Sticker, Smile, Download, Palette, Info, Clock, Mic, ShoppingBag, Store, PlusCircle, Package } from 'lucide-react';
 import EmojiPicker from 'emoji-picker-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from './context/AuthContext.jsx';
@@ -63,6 +63,7 @@ const THEMES = {
   }
 };
 import BugReportModal from './components/BugReportModal.jsx';
+import ProductCard from './components/ProductCard.jsx';
 import { encryptionService } from './utils/EncryptionService';
 
 const ChatInterface = () => {
@@ -70,7 +71,7 @@ const ChatInterface = () => {
   const [messageInput, setMessageInput] = useState('');
   const [contacts, setContacts] = useState([]);
   const [messages, setMessages] = useState([]);
-  const { user, logout } = useAuth();
+  const { user, logout, becomeVendor } = useAuth();
   const navigate = useNavigate();
   const messagesEndRef = useRef(null);
   const [showBugReport, setShowBugReport] = useState(false);
@@ -109,8 +110,29 @@ const ChatInterface = () => {
   const [activeTheme, setActiveTheme] = useState(() => localStorage.getItem('chat_theme') || 'light');
   const [showThemeModal, setShowThemeModal] = useState(false);
   const [showUserProfileModal, setShowUserProfileModal] = useState(false);
+  const [showOrdersModal, setShowOrdersModal] = useState(false);
+  const [showMarketplaceModal, setShowMarketplaceModal] = useState(false);
+  const [marketplaceTab, setMarketplaceTab] = useState('browse'); // 'browse' or 'manage'
+  const [marketplaceProducts, setMarketplaceProducts] = useState([]);
+  const [myProducts, setMyProducts] = useState([]);
+  const [categories, setCategories] = useState([]);
+  const [marketplaceLoading, setMarketplaceLoading] = useState(false);
+  const [newProduct, setNewProduct] = useState({
+    name: '',
+    description: '',
+    price: '',
+    location: '',
+    category_id: '',
+    image_url: ''
+  });
+  const [orders, setOrders] = useState([]);
+  const [ordersLoading, setOrdersLoading] = useState(false);
+  const [ordersTab, setOrdersTab] = useState('buying'); // 'buying' or 'selling'
   const [profileViewUser, setProfileViewUser] = useState(null);
   const [showSchedulePicker, setShowSchedulePicker] = useState(false); // Scheduled Messages
+  const [isRecording, setIsRecording] = useState(false);
+  const [mediaRecorder, setMediaRecorder] = useState(null);
+  const [audioChunks, setAudioChunks] = useState([]);
 
   // Apply theme effect
   useEffect(() => {
@@ -494,6 +516,10 @@ const ChatInterface = () => {
       }
     }
 
+    // Agricultural Keywords for AI Search Interception
+    const agKeywords = ['find', 'buy', 'search', 'maize', 'yam', 'rice', 'beans', 'poultry', 'cow', 'fertilizer', 'tractor', 'farm', 'price of'];
+    const isAgQuery = type === 'text' && agKeywords.some(kw => content.toLowerCase().includes(kw));
+
     const messageData = {
       chatId: selectedContact.id,
       senderId: user.id,
@@ -509,6 +535,28 @@ const ChatInterface = () => {
 
     socket.emit('send_message', messageData);
     setMessageInput('');
+
+    // If it's an agricultural query, trigger AI discovery
+    if (isAgQuery) {
+      try {
+        const response = await api.post('/marketplace/ai-search', { query: messageInput });
+        if (response.data && response.data.length > 0) {
+          setTimeout(() => {
+            response.data.forEach((product) => {
+              socket.emit('send_message', {
+                chatId: selectedContact.id,
+                senderId: user.id,
+                content: `Found ${product.name} at ${product.location}`,
+                type: 'product',
+                product_data: product
+              });
+            });
+          }, 800);
+        }
+      } catch (err) {
+        console.error('AI Discovery failed:', err);
+      }
+    }
   };
 
   const handleAddMembers = async () => {
@@ -663,10 +711,163 @@ const ChatInterface = () => {
     }
   };
 
+  const handleStartRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new MediaRecorder(stream);
+      const chunks = [];
+
+      recorder.ondataavailable = (e) => chunks.push(e.data);
+      recorder.onstop = async () => {
+        const blob = new Blob(chunks, { type: 'audio/webm' });
+        const file = new File([blob], 'recording.webm', { type: 'audio/webm' });
+        handleVoiceSearch(file);
+      };
+
+      recorder.start();
+      setMediaRecorder(recorder);
+      setIsRecording(true);
+    } catch (err) {
+      console.error('Error starting recording:', err);
+      alert('Could not access microphone.');
+    }
+  };
+
+  const handleStopRecording = () => {
+    if (mediaRecorder) {
+      mediaRecorder.stop();
+      mediaRecorder.stream.getTracks().forEach(track => track.stop());
+      setIsRecording(false);
+      setMediaRecorder(null);
+    }
+  };
+
+  const handleVoiceSearch = async (file) => {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    setIsUploading(true);
+    try {
+      const response = await api.post('/marketplace/voice-search', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      if (response.data.transcription) {
+        setMessageInput(response.data.transcription);
+      }
+    } catch (error) {
+      console.error('Voice search failed:', error);
+      const errorMsg = error.response?.data?.error || error.message || 'Unknown error';
+      alert(`Voice transcription failed: ${errorMsg}`);
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const fetchOrders = async (role = 'buyer') => {
+    setOrdersLoading(true);
+    try {
+      const response = await api.get(`/marketplace/orders?role=${role}`);
+      setOrders(response.data);
+    } catch (error) {
+      console.error('Error fetching orders:', error);
+    } finally {
+      setOrdersLoading(false);
+    }
+  };
+
+  const handleUpdateOrderStatus = async (orderId, newStatus) => {
+    try {
+      await api.post(`/marketplace/orders/${orderId}/status`, { status: newStatus });
+      alert(`Order marked as ${newStatus}`);
+      fetchOrders(ordersTab === 'buying' ? 'buyer' : 'vendor');
+    } catch (error) {
+      console.error('Status update failed:', error);
+      alert('Failed to update order status');
+    }
+  };
+
+  const handleCheckout = async (product) => {
+    try {
+      const response = await api.post('/marketplace/checkout', {
+        productId: product.id,
+        quantity: 1
+      });
+      if (response.data.checkout_url) {
+        window.open(response.data.checkout_url, '_blank');
+      }
+    } catch (error) {
+      console.error('Checkout failed:', error);
+      alert(error.response?.data?.error || 'Failed to initiate checkout.');
+    }
+  };
+
   const scrollToBottom = () => {
     setTimeout(() => {
       messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
     }, 100);
+  };
+
+  const fetchMarketplaceProducts = async () => {
+    setMarketplaceLoading(true);
+    try {
+      const response = await api.get('/marketplace/products');
+      setMarketplaceProducts(response.data);
+    } catch (error) {
+      console.error('Error fetching products:', error);
+    } finally {
+      setMarketplaceLoading(false);
+    }
+  };
+
+  const fetchMyProducts = async () => {
+    if (!user) return;
+    setMarketplaceLoading(true);
+    try {
+      const response = await api.get(`/marketplace/products?vendor_id=${user.id}`);
+      setMyProducts(response.data);
+    } catch (error) {
+      console.error('Error fetching my products:', error);
+    } finally {
+      setMarketplaceLoading(false);
+    }
+  };
+
+  const fetchCategories = async () => {
+    try {
+      const response = await api.get('/marketplace/categories');
+      setCategories(response.data);
+    } catch (error) {
+      console.error('Error fetching categories:', error);
+    }
+  };
+
+  const handleAddProduct = async (e) => {
+    e.preventDefault();
+    try {
+      await api.post('/marketplace/products', {
+        ...newProduct,
+        vendor_id: user.id
+      });
+      alert('Product added successfully!');
+      setNewProduct({ name: '', description: '', price: '', location: '', category_id: '', image_url: '' });
+      fetchMyProducts();
+    } catch (error) {
+      console.error('Error adding product:', error);
+      alert('Failed to add product');
+    }
+  };
+
+  const handleMarketplaceSearch = async (query) => {
+    if (!query.trim()) return;
+    setMarketplaceLoading(true);
+    try {
+      const response = await api.post('/marketplace/ai-search', { query });
+      setMarketplaceProducts(response.data);
+    } catch (error) {
+      console.error('AI search failed:', error);
+    } finally {
+      setMarketplaceLoading(false);
+    }
   };
 
   const handleLogout = () => {
@@ -752,6 +953,25 @@ const ChatInterface = () => {
               style={{ cursor: 'pointer', color: '#6b7280' }}
               onClick={() => setShowThemeModal(true)}
               title="Change Theme"
+            />
+            <Store
+              size={20}
+              style={{ cursor: 'pointer', color: '#6b7280' }}
+              onClick={() => {
+                setShowMarketplaceModal(true);
+                fetchMarketplaceProducts();
+                fetchCategories();
+              }}
+              title="Marketplace"
+            />
+            <ShoppingBag
+              size={20}
+              style={{ cursor: 'pointer', color: '#6b7280' }}
+              onClick={() => {
+                setShowOrdersModal(true);
+                fetchOrders(ordersTab === 'buying' ? 'buyer' : 'vendor');
+              }}
+              title="Marketplace Orders"
             />
             <div
               style={{ ...styles.userSection, cursor: 'pointer' }}
@@ -1174,6 +1394,13 @@ const ChatInterface = () => {
                       <p style={styles.messageText}>{message.message}</p>
                     )}
 
+                    {message.type === 'product' && message.product_data && (
+                      <ProductCard 
+                        product={message.product_data} 
+                        onBuy={() => handleCheckout(message.product_data)} 
+                      />
+                    )}
+
                     <div style={styles.messageMeta}>
                       {message.time && (
                         <p style={{
@@ -1347,9 +1574,25 @@ const ChatInterface = () => {
                 >
                   <Smile size={20} color={showMediaPicker ? '#007AFF' : '#6b7280'} />
                 </button>
-                <button style={styles.sendButton} onClick={() => handleSendMessage()}>
-                  <Send size={18} />
-                </button>
+                {messageInput.trim().length > 0 ? (
+                  <button style={styles.sendButton} onClick={() => handleSendMessage()}>
+                    <Send size={18} />
+                  </button>
+                ) : (
+                  <button 
+                    style={{ 
+                      ...styles.sendButton, 
+                      backgroundColor: isRecording ? '#ef4444' : '#3b82f6',
+                      transition: 'all 0.2s ease'
+                    }} 
+                    onMouseDown={handleStartRecording}
+                    onMouseUp={handleStopRecording}
+                    onMouseLeave={isRecording ? handleStopRecording : undefined}
+                    title="Hold to record voice search"
+                  >
+                    <Mic size={18} color="white" />
+                  </button>
+                )}
               </div>
 
               {showMediaPicker && (
@@ -1627,6 +1870,44 @@ const ChatInterface = () => {
                     placeholder="Tell us about yourself..."
                     style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #d1d5db', height: '80px', resize: 'none' }}
                   />
+                </div>
+
+                <div style={{ marginBottom: '20px', padding: '12px', backgroundColor: '#f9fafb', borderRadius: '8px' }}>
+                  <label style={{ display: 'block', fontSize: '14px', marginBottom: '8px', color: '#111827', fontWeight: '600' }}>Account Status</label>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column' }}>
+                      <span style={{ fontSize: '13px', fontWeight: '600', color: '#111827' }}>
+                        {user?.role === 'vendor' ? 'Verified Vendor' : 'Standard Buyer'}
+                      </span>
+                      <span style={{ fontSize: '11px', color: '#6b7280' }}>
+                        {user?.role === 'vendor' ? 'You can list agricultural products' : 'Upgrade to sell on Orion'}
+                      </span>
+                    </div>
+                    {user?.role !== 'vendor' && (
+                      <button
+                        type="button"
+                        onClick={async (e) => {
+                          e.preventDefault();
+                          if (window.confirm('Do you want to upgrade to a Vendor account?')) {
+                            const success = await becomeVendor();
+                            if (success) alert('Congratulations! You are now a vendor.');
+                          }
+                        }}
+                        style={{
+                          backgroundColor: '#10b981',
+                          color: 'white',
+                          border: 'none',
+                          borderRadius: '6px',
+                          padding: '6px 12px',
+                          fontSize: '11px',
+                          fontWeight: '600',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        Become a Vendor
+                      </button>
+                    )}
+                  </div>
                 </div>
                 <button
                   type="submit"
@@ -1923,6 +2204,244 @@ const ChatInterface = () => {
           </div>
         )
       }
+      {showOrdersModal && (
+        <div style={styles.modalOverlay} onClick={() => setShowOrdersModal(false)}>
+          <div style={{ ...styles.modalContent, width: '600px' }} onClick={(e) => e.stopPropagation()}>
+            <div style={styles.modalHeader}>
+              <h2 style={styles.modalTitle}>Marketplace Orders</h2>
+              <X size={24} style={{ cursor: 'pointer', color: '#6b7280' }} onClick={() => setShowOrdersModal(false)} />
+            </div>
+
+            <div style={{ padding: '0 24px', display: 'flex', gap: '16px', borderBottom: '1px solid #f3f4f6' }}>
+              <button
+                style={ordersTab === 'buying' ? styles.photoTabActive : styles.photoTab}
+                onClick={() => { setOrdersTab('buying'); fetchOrders('buyer'); }}
+              >
+                Buying
+              </button>
+              <button
+                style={ordersTab === 'selling' ? styles.photoTabActive : styles.photoTab}
+                onClick={() => { setOrdersTab('selling'); fetchOrders('vendor'); }}
+              >
+                Selling
+              </button>
+            </div>
+
+            <div style={{ flex: 1, overflowY: 'auto', padding: '24px' }}>
+              {ordersLoading ? (
+                <div style={{ display: 'flex', justifyContent: 'center', padding: '40px' }}><div style={styles.spinner}></div></div>
+              ) : orders.length === 0 ? (
+                <div style={styles.emptyState}>
+                  <ShoppingBag size={48} />
+                  <p style={{ marginTop: '16px' }}>No orders found</p>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                  {orders.map(order => (
+                    <div key={order.id} style={{
+                      padding: '16px',
+                      borderRadius: '16px',
+                      border: '1px solid #e5e7eb',
+                      backgroundColor: '#f9fafb'
+                    }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px' }}>
+                        <span style={{ fontSize: '12px', color: '#6b7280' }}>Order #{order.id}</span>
+                        <span style={{
+                          fontSize: '10px',
+                          fontWeight: 'bold',
+                          padding: '2px 8px',
+                          borderRadius: '4px',
+                          backgroundColor: '#e5e7eb',
+                          textTransform: 'uppercase'
+                        }}>{order.status}</span>
+                      </div>
+                      <div style={{ marginBottom: '12px' }}>
+                        <p style={{ fontWeight: '600', margin: '0 0 4px 0', color: '#111827' }}>
+                          {ordersTab === 'buying' ? `Vendor: ${order.vendor_name}` : `Buyer: ${order.buyer_name}`}
+                        </p>
+                        <p style={{ fontSize: '18px', fontWeight: 'bold', color: '#10b981', margin: 0 }}>₦{order.total_amount.toLocaleString()}</p>
+                        <p style={{ fontSize: '12px', color: '#9ca3af', margin: '4px 0 0 0' }}>{new Date(order.created_at).toLocaleDateString()}</p>
+                      </div>
+
+                      <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        padding: '8px',
+                        backgroundColor: '#eff6ff',
+                        borderRadius: '8px',
+                        marginBottom: '12px'
+                      }}>
+                        <Info size={14} color="#3b82f6" />
+                        <span style={{ fontSize: '12px', color: '#3b82f6' }}>
+                          Escrow: {order.escrow_status === 'held' ? 'Funds Protected' : 'Funds Released'}
+                        </span>
+                      </div>
+
+                      <div style={{ display: 'flex', gap: '8px' }}>
+                        {ordersTab === 'selling' && order.status === 'paid' && (
+                          <button
+                            style={{ ...styles.sendButton, width: 'auto', padding: '0 16px', borderRadius: '8px', fontSize: '12px', backgroundColor: '#f59e0b', color: 'white' }}
+                            onClick={() => handleUpdateOrderStatus(order.id, 'shipped')}
+                          >
+                            Mark as Shipped
+                          </button>
+                        )}
+                        {ordersTab === 'buying' && order.status === 'shipped' && (
+                          <button
+                            style={{ ...styles.sendButton, width: 'auto', padding: '0 16px', borderRadius: '8px', fontSize: '12px', backgroundColor: '#10b981', color: 'white' }}
+                            onClick={() => handleUpdateOrderStatus(order.id, 'delivered')}
+                          >
+                            Confirm Delivery
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+      {showMarketplaceModal && (
+        <div style={styles.modalOverlay} onClick={() => setShowMarketplaceModal(false)}>
+          <div style={{ ...styles.modalContent, width: '850px', maxWidth: '90vw', height: '85vh' }} onClick={(e) => e.stopPropagation()}>
+            <div style={styles.modalHeader}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <Store size={24} color="#3b82f6" />
+                <h2 style={styles.modalTitle}>Orion Marketplace</h2>
+              </div>
+              <X size={24} style={{ cursor: 'pointer', color: '#6b7280' }} onClick={() => setShowMarketplaceModal(false)} />
+            </div>
+
+            <div style={{ padding: '0 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #f3f4f6', backgroundColor: '#fff' }}>
+              <div style={{ display: 'flex', gap: '24px' }}>
+                <button
+                  style={marketplaceTab === 'browse' ? styles.photoTabActive : styles.photoTab}
+                  onClick={() => { setMarketplaceTab('browse'); fetchMarketplaceProducts(); }}
+                >
+                  Browse Products
+                </button>
+                {user?.role === 'vendor' && (
+                  <button
+                    style={marketplaceTab === 'manage' ? styles.photoTabActive : styles.photoTab}
+                    onClick={() => { setMarketplaceTab('manage'); fetchMyProducts(); }}
+                  >
+                    My Store
+                  </button>
+                )}
+              </div>
+
+              {marketplaceTab === 'browse' && (
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'center', backgroundColor: '#f3f4f6', padding: '6px 12px', borderRadius: '20px', width: '300px' }}>
+                  <Search size={16} color="#9ca3af" />
+                  <input
+                    placeholder="AI Search (e.g. cheap rice in Kano)"
+                    style={{ border: 'none', background: 'transparent', outline: 'none', fontSize: '13px', flex: 1 }}
+                    onKeyPress={(e) => e.key === 'Enter' && handleMarketplaceSearch(e.currentTarget.value)}
+                  />
+                  <Mic size={16} color="#3b82f6" style={{ cursor: 'pointer' }} onClick={() => alert('Coming soon: Marketplace Voice Search')} />
+                </div>
+              )}
+            </div>
+
+            <div style={{ flex: 1, overflowY: 'auto', padding: '24px', backgroundColor: '#f9fafb', display: 'flex', flexDirection: 'column' }}>
+              {marketplaceLoading ? (
+                <div style={{ display: 'flex', justifyContent: 'center', padding: '50px' }}><div style={styles.spinner}></div></div>
+              ) : marketplaceTab === 'browse' ? (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '20px', padding: '8px' }}>
+                  {marketplaceProducts.length === 0 ? (
+                    <div style={{ gridColumn: '1/-1', textAlign: 'center', padding: '40px', color: '#6b7280' }}>
+                      <Package size={48} style={{ opacity: 0.3, marginBottom: '16px' }} />
+                      <p>No products found in the marketplace.</p>
+                    </div>
+                  ) : (
+                    marketplaceProducts.map(product => (
+                      <ProductCard key={product.id} product={product} onBuy={() => handleCheckout(product)} />
+                    ))
+                  )}
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+                  <div style={{ backgroundColor: 'white', padding: '20px', borderRadius: '16px', border: '1px solid #e5e7eb' }}>
+                    <h3 style={{ margin: '0 0 16px 0', fontSize: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <PlusCircle size={18} color="#10b981" /> List New Product
+                    </h3>
+                    <form onSubmit={handleAddProduct} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                      <input
+                        placeholder="Product Name"
+                        required
+                        style={styles.input}
+                        value={newProduct.name}
+                        onChange={e => setNewProduct({...newProduct, name: e.target.value})}
+                      />
+                      <select
+                        required
+                        style={styles.input}
+                        value={newProduct.category_id}
+                        onChange={e => setNewProduct({...newProduct, category_id: e.target.value})}
+                      >
+                        <option value="">Select Category</option>
+                        {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                      </select>
+                      <input
+                        placeholder="Price (₦)"
+                        type="number"
+                        required
+                        style={styles.input}
+                        value={newProduct.price}
+                        onChange={e => setNewProduct({...newProduct, price: e.target.value})}
+                      />
+                      <input
+                        placeholder="Location"
+                        required
+                        style={styles.input}
+                        value={newProduct.location}
+                        onChange={e => setNewProduct({...newProduct, location: e.target.value})}
+                      />
+                      <textarea
+                        placeholder="Description"
+                        required
+                        style={{ ...styles.input, gridColumn: '1/-1', height: '80px', paddingTop: '10px' }}
+                        value={newProduct.description}
+                        onChange={e => setNewProduct({...newProduct, description: e.target.value})}
+                      />
+                      <input
+                        placeholder="Image URL"
+                        style={{ ...styles.input, gridColumn: '1/-1'}}
+                        value={newProduct.image_url}
+                        onChange={e => setNewProduct({...newProduct, image_url: e.target.value})}
+                      />
+                      <button type="submit" style={{ ...styles.sendButton, gridColumn: '1/-1', borderRadius: '8px' }}>
+                        List Product
+                      </button>
+                    </form>
+                  </div>
+
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
+                      <Package size={18} color="#3b82f6" />
+                      <h3 style={{ margin: 0, fontSize: '16px' }}>Your Listings</h3>
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '20px' }}>
+                      {myProducts.length === 0 ? (
+                        <div style={{ gridColumn: '1/-1', textAlign: 'center', padding: '20px', color: '#9ca3af', border: '2px dashed #e5e7eb', borderRadius: '12px' }}>
+                          You haven't listed any products yet.
+                        </div>
+                      ) : (
+                        myProducts.map(product => (
+                          <ProductCard key={product.id} product={product} />
+                        ))
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
       {/* Theme Selector Modal */}
       {showThemeModal && (
         <div style={styles.modalOverlay} onClick={() => setShowThemeModal(false)}>

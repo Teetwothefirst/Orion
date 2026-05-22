@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, Alert, Image, T
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/context/AuthContext';
+import { api } from '@/services/api';
 import * as ImagePicker from 'expo-image-picker';
 
 interface Passkey {
@@ -20,6 +21,7 @@ export default function AccountScreen() {
     const [avatar, setAvatar] = useState(user?.avatar || '');
     const [avatarFile, setAvatarFile] = useState<any>(null);
     const [isUpdating, setIsUpdating] = useState(false);
+    const [isJoiningVendor, setIsJoiningVendor] = useState(false);
 
     const [passkeys, setPasskeys] = useState<Passkey[]>([
         { id: '1', name: 'MACBOOK_AIR', key: 'passkey:*********************' },
@@ -68,6 +70,34 @@ export default function AccountScreen() {
         } finally {
             setIsUpdating(false);
         }
+    };
+
+    const handleBecomeVendor = async () => {
+        Alert.alert(
+            'Become a Vendor',
+            'Upgrade to vendor status to start listing and selling agricultural products on Orion.',
+            [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                    text: 'Join Now',
+                    onPress: async () => {
+                        setIsJoiningVendor(true);
+                        try {
+                            const response = await api.post('/marketplace/vendor-signup');
+                            if (response.data.success) {
+                                Alert.alert('Success', 'You are now a vendor! Please restart the app or refresh to see vendor features.');
+                                // In a real app, we'd update the global user state here
+                            }
+                        } catch (error) {
+                            console.error('Vendor signup error:', error);
+                            Alert.alert('Error', 'Failed to upgrade to vendor');
+                        } finally {
+                            setIsJoiningVendor(false);
+                        }
+                    }
+                }
+            ]
+        );
     };
 
     const handleDeletePasskey = (id: string) => {
@@ -147,6 +177,29 @@ export default function AccountScreen() {
                 </TouchableOpacity>
 
                 <View style={styles.sectionDivider} />
+
+                {/* Vendor Section */}
+                {user?.role === 'buyer' && (
+                    <View style={styles.vendorPromo}>
+                        <Text style={styles.vendorPromoTitle}>Grow Your Business</Text>
+                        <Text style={styles.vendorPromoDesc}>Start selling your agricultural products directly to buyers in your area.</Text>
+                        <TouchableOpacity 
+                            style={styles.vendorButton} 
+                            onPress={handleBecomeVendor}
+                            disabled={isJoiningVendor}
+                        >
+                            {isJoiningVendor ? <ActivityIndicator color="white" /> : <Text style={styles.vendorButtonText}>Become a Vendor</Text>}
+                        </TouchableOpacity>
+                    </View>
+                )}
+
+                {user?.role === 'vendor' && (
+                    <View style={styles.vendorStatus}>
+                        <Ionicons name="checkmark-circle" size={24} color="#4ADE80" />
+                        <Text style={styles.vendorStatusText}>Verified Vendor Account</Text>
+                    </View>
+                )}
+
                 <Text style={styles.sectionTitle}>Passkeys</Text>
 
                 {/* Passkeys List */}
@@ -321,5 +374,50 @@ const styles = StyleSheet.create({
         fontSize: 18,
         fontWeight: 'bold',
         marginBottom: 16,
+    },
+    vendorPromo: {
+        backgroundColor: '#1E1E1E',
+        borderRadius: 16,
+        padding: 20,
+        marginBottom: 24,
+        borderWidth: 1,
+        borderColor: '#007AFF',
+    },
+    vendorPromoTitle: {
+        color: 'white',
+        fontSize: 18,
+        fontWeight: 'bold',
+        marginBottom: 8,
+    },
+    vendorPromoDesc: {
+        color: '#888',
+        fontSize: 14,
+        marginBottom: 16,
+        lineHeight: 20,
+    },
+    vendorButton: {
+        backgroundColor: '#007AFF',
+        borderRadius: 12,
+        padding: 14,
+        alignItems: 'center',
+    },
+    vendorButtonText: {
+        color: 'white',
+        fontSize: 16,
+        fontWeight: '600',
+    },
+    vendorStatus: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        backgroundColor: '#1E1E1E',
+        padding: 16,
+        borderRadius: 12,
+        marginBottom: 24,
+    },
+    vendorStatusText: {
+        color: '#4ADE80',
+        fontSize: 16,
+        fontWeight: '600',
     },
 });

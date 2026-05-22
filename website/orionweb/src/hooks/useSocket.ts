@@ -8,6 +8,7 @@ export interface User {
     email: string;
     avatar?: string;
     status: 'online' | 'offline';
+    role?: 'user' | 'vendor';
 }
 
 export interface Message {
@@ -19,6 +20,7 @@ export interface Message {
     timestamp: string;
     username?: string;
     avatar?: string;
+    product_data?: any;
 }
 
 export interface Chat {

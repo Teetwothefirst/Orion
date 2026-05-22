@@ -7,8 +7,31 @@ import {
 import { SignalStore } from './SignalStore';
 import { api } from './api';
 
-// Polyfill for TextEncoder/Decoder if not available in RN environment
-import 'fast-text-encoding';
+// React Native TextEncoder/TextDecoder polyfill
+if (typeof (global as any).TextEncoder === 'undefined') {
+    (global as any).TextEncoder = class TextEncoder {
+        encode(str: string): Uint8Array {
+            const arr = new Uint8Array(str.length);
+            for (let i = 0; i < str.length; i++) {
+                arr[i] = str.charCodeAt(i) & 0xFF;
+            }
+            return arr;
+        }
+    };
+}
+
+if (typeof (global as any).TextDecoder === 'undefined') {
+    (global as any).TextDecoder = class TextDecoder {
+        decode(buffer: ArrayBuffer): string {
+            const bytes = new Uint8Array(buffer);
+            let result = '';
+            for (let i = 0; i < bytes.length; i++) {
+                result += String.fromCharCode(bytes[i]);
+            }
+            return result;
+        }
+    };
+}
 
 class EncryptionService {
     private store: SignalStore;
@@ -96,56 +119,88 @@ class EncryptionService {
         return bytes.buffer;
     }
 
+    private _encodeString(str: string): ArrayBuffer {
+        // Use manual encoding to avoid TextEncoder encoding parameter issues
+        const bytes = new Uint8Array(str.length);
+        for (let i = 0; i < str.length; i++) {
+            bytes[i] = str.charCodeAt(i) & 0xFF;
+        }
+        return bytes.buffer;
+    }
+
     async encryptMessage(recipientId: number, plaintext: string) {
         if (!this.initialized) throw new Error('Encryption service not initialized');
 
-        const address = new ProtocolAddress(recipientId.toString(), 1);
-        const hasSession = await this.store.loadSession(address.toString());
+        try {
+            const address = new ProtocolAddress(recipientId.toString(), 1);
+            const hasSession = await this.store.loadSession(address.toString());
 
-        if (!hasSession) {
-            console.log('Mobile: Building new session for:', recipientId);
-            const bundleResponse = await api.get(`/keys/bundle/${recipientId}`);
-            const bundle = bundleResponse.data;
+            if (!hasSession) {
+                console.log('Mobile: Building new session for:', recipientId);
+                const bundleResponse = await api.get(`/keys/bundle/${recipientId}`);
+                const bundle = bundleResponse.data;
 
-            const builder = new SessionBuilder(this.store as any, address);
-            await builder.processPreKey({
-                registrationId: bundle.registrationId,
-                identityKey: this._base64ToBuffer(bundle.identityKey),
-                signedPreKey: {
-                    keyId: bundle.signedPreKey.keyId,
-                    publicKey: this._base64ToBuffer(bundle.signedPreKey.publicKey),
-                    signature: this._base64ToBuffer(bundle.signedPreKey.signature)
-                },
-                preKey: bundle.oneTimePreKey ? {
-                    keyId: bundle.oneTimePreKey.keyId,
-                    publicKey: this._base64ToBuffer(bundle.oneTimePreKey.publicKey)
-                } : undefined
-            });
+                const builder = new SessionBuilder(this.store as any, address);
+                await builder.processPreKey({
+                    registrationId: bundle.registrationId,
+                    identityKey: this._base64ToBuffer(bundle.identityKey),
+                    signedPreKey: {
+                        keyId: bundle.signedPreKey.keyId,
+                        publicKey: this._base64ToBuffer(bundle.signedPreKey.publicKey),
+                        signature: this._base64ToBuffer(bundle.signedPreKey.signature)
+                    },
+                    preKey: bundle.oneTimePreKey ? {
+                        keyId: bundle.oneTimePreKey.keyId,
+                        publicKey: this._base64ToBuffer(bundle.oneTimePreKey.publicKey)
+                    } : undefined
+                });
+            }
+
+            const cipher = new SessionCipher(this.store as any, address);
+            // Use manual encoding to avoid TextEncoder encoding parameter issues
+            const encoded = this._encodeString(plaintext);
+            const ciphertext = await cipher.encrypt(encoded);
+
+            return {
+                type: ciphertext.type,
+                body: ciphertext.body
+            };
+        } catch (error) {
+            console.error('Encryption error:', error);
+            throw error;
         }
+    }
 
-        const cipher = new SessionCipher(this.store as any, address);
-        const ciphertext = await cipher.encrypt(new TextEncoder().encode(plaintext).buffer);
-
-        return {
-            type: ciphertext.type,
-            body: ciphertext.body
-        };
+    private _decodeBuffer(buffer: ArrayBuffer): string {
+        // Use manual decoding to avoid TextDecoder encoding parameter issues
+        const bytes = new Uint8Array(buffer);
+        let result = '';
+        for (let i = 0; i < bytes.length; i++) {
+            result += String.fromCharCode(bytes[i]);
+        }
+        return result;
     }
 
     async decryptMessage(senderId: number, encryptedData: any) {
         if (!this.initialized) throw new Error('Encryption service not initialized');
 
-        const address = new ProtocolAddress(senderId.toString(), 1);
-        const cipher = new SessionCipher(this.store as any, address);
+        try {
+            const address = new ProtocolAddress(senderId.toString(), 1);
+            const cipher = new SessionCipher(this.store as any, address);
 
-        let plaintextBuffer;
-        if (encryptedData.type === 3) {
-            plaintextBuffer = await cipher.decryptWhisperMessage(encryptedData.body);
-        } else {
-            plaintextBuffer = await cipher.decryptPreKeyWhisperMessage(encryptedData.body);
+            let plaintextBuffer;
+            if (encryptedData.type === 3) {
+                plaintextBuffer = await cipher.decryptWhisperMessage(encryptedData.body);
+            } else {
+                plaintextBuffer = await cipher.decryptPreKeyWhisperMessage(encryptedData.body);
+            }
+
+            // Use manual decoding to avoid TextDecoder encoding parameter issues
+            return this._decodeBuffer(plaintextBuffer);
+        } catch (error) {
+            console.error('Decryption error:', error);
+            throw error;
         }
-
-        return new TextDecoder().decode(plaintextBuffer);
     }
 }
 

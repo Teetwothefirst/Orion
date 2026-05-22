@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Search, MoreHorizontal, MoreVertical, Send, Home, MessageCircle, Users, Heart, Bell, Plus, X, Paperclip, Check, CheckCheck, Reply, Forward, FileText, Play, Sticker, Smile, Download, Palette, Info, Clock, Mic, ShoppingBag, Store, PlusCircle, Package } from 'lucide-react';
+import { Search, MoreHorizontal, MoreVertical, Send, Home, MessageCircle, Users, Heart, Bell, Plus, X, Paperclip, Check, CheckCheck, Reply, Forward, FileText, Play, Sticker, Smile, Download, Palette, Info, Clock, Mic, ShoppingBag, Store, PlusCircle, Package, ChevronLeft } from 'lucide-react';
 import EmojiPicker from 'emoji-picker-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from './context/AuthContext.jsx';
@@ -66,7 +66,7 @@ import BugReportModal from './components/BugReportModal.jsx';
 import ProductCard from './components/ProductCard.jsx';
 import { encryptionService } from './utils/EncryptionService';
 
-const ChatInterface = () => {
+const ChatInterface = ({ embedded, sidebarCollapsed, setSidebarCollapsed }) => {
   const [selectedContact, setSelectedContact] = useState(null);
   const [messageInput, setMessageInput] = useState('');
   const [contacts, setContacts] = useState([]);
@@ -936,59 +936,83 @@ const ChatInterface = () => {
 
 
   return (
-    <div style={styles.container}>
+    <div style={{
+      ...styles.container,
+      height: embedded ? '100%' : '100vh',
+      background: embedded ? 'transparent' : styles.container.background,
+      flex: embedded ? 1 : undefined
+    }}>
       {/* Sidebar */}
-      <div style={styles.sidebar}>
+      <div style={{
+        ...styles.sidebar,
+        width: embedded ? (sidebarCollapsed ? '0px' : '280px') : '320px',
+        borderRight: embedded && sidebarCollapsed ? 'none' : styles.sidebar.borderRight,
+        overflow: 'hidden',
+        transition: 'width 0.2s ease-out'
+      }}>
         {/* Header */}
-        <div style={styles.sidebarHeader}>
-          <div style={styles.logoSection}>
-            <div style={styles.logo}>
-              <span style={styles.logoText}>O</span>
-            </div>
-            <span style={styles.logoipsum}>Orion Chat</span>
-          </div>
-          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-            <Palette
-              size={20}
-              style={{ cursor: 'pointer', color: '#6b7280' }}
-              onClick={() => setShowThemeModal(true)}
-              title="Change Theme"
-            />
-            <Store
-              size={20}
-              style={{ cursor: 'pointer', color: '#6b7280' }}
-              onClick={() => {
-                setShowMarketplaceModal(true);
-                fetchMarketplaceProducts();
-                fetchCategories();
-              }}
-              title="Marketplace"
-            />
-            <ShoppingBag
-              size={20}
-              style={{ cursor: 'pointer', color: '#6b7280' }}
-              onClick={() => {
-                setShowOrdersModal(true);
-                fetchOrders(ordersTab === 'buying' ? 'buyer' : 'vendor');
-              }}
-              title="Marketplace Orders"
-            />
-            <div
-              style={{ ...styles.userSection, cursor: 'pointer' }}
-              onClick={() => setShowProfileModal(true)}
-              title="Profile Settings"
-            >
-              <div style={styles.userAvatar}>
-                {user?.avatar ? (
-                  <img src={user.avatar} alt="Avatar" style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} />
-                ) : (
-                  <span>👤</span>
-                )}
+        {!embedded ? (
+          <div style={styles.sidebarHeader}>
+            <div style={styles.logoSection}>
+              <div style={styles.logo}>
+                <span style={styles.logoText}>O</span>
               </div>
-              <span style={styles.userName}>{user?.username || 'User'}</span>
+              <span style={styles.logoipsum}>Orion Chat</span>
+            </div>
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+              <Palette
+                size={20}
+                style={{ cursor: 'pointer', color: '#6b7280' }}
+                onClick={() => setShowThemeModal(true)}
+                title="Change Theme"
+              />
+              <Store
+                size={20}
+                style={{ cursor: 'pointer', color: '#6b7280' }}
+                onClick={() => {
+                  setShowMarketplaceModal(true);
+                  fetchMarketplaceProducts();
+                  fetchCategories();
+                }}
+                title="Marketplace"
+              />
+              <ShoppingBag
+                size={20}
+                style={{ cursor: 'pointer', color: '#6b7280' }}
+                onClick={() => {
+                  setShowOrdersModal(true);
+                  fetchOrders(ordersTab === 'buying' ? 'buyer' : 'vendor');
+                }}
+                title="Marketplace Orders"
+              />
+              <div
+                style={{ ...styles.userSection, cursor: 'pointer' }}
+                onClick={() => setShowProfileModal(true)}
+                title="Profile Settings"
+              >
+                <div style={styles.userAvatar}>
+                  {user?.avatar ? (
+                    <img src={user.avatar} alt="Avatar" style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} />
+                  ) : (
+                    <span>👤</span>
+                  )}
+                </div>
+                <span style={styles.userName}>{user?.username || 'User'}</span>
+              </div>
             </div>
           </div>
-        </div>
+        ) : (
+          <div className="sidebar-header">
+            <span className="sidebar-title">Chats</span>
+            <button 
+              className="sidebar-action-btn" 
+              onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+              title="Collapse Sidebar"
+            >
+              <ChevronLeft size={16} />
+            </button>
+          </div>
+        )}
 
         {/* Connections Header with Search */}
         <div style={styles.connectionsHeader}>

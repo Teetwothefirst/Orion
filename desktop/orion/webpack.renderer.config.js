@@ -22,6 +22,7 @@ module.exports = {
     })
   ],
   resolve: {
+    extensions: ['.js', '.jsx', '.json'],
     fallback: {
       "path": false,
       "fs": false,

@@ -2,8 +2,10 @@ import * as React from 'react';
 // import { createRoot } from 'react-dom/client';
 import * as ReactDOM from "react-dom/client";
 import Auth from './Auth.jsx';
-import ChatInterface from './ChatInterface.jsx'
+import ChatInterface from './ChatInterface.jsx';
+import AppShell from './components/AppShell.jsx';
 import { AuthProvider } from './context/AuthContext.jsx';
+import { UserRoleProvider } from './context/UserRoleContext.jsx';
 import {
   createBrowserRouter,
   RouterProvider,
@@ -61,14 +63,16 @@ ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
     <ErrorBoundary>
       <AuthProvider>
-        <HashRouter>
-          <Routes>
-            <Route path="/" element={<Auth />} />
-            <Route path='/chat' element={<ChatInterface />} />
-            {/* <Route path='/forgotPassword' element={<ForgotPassword />} />
-            <Route path='/resetPassword' element={<ResetPassword />} /> */}
-          </Routes>
-        </HashRouter>
+        <UserRoleProvider>
+          <HashRouter>
+            <Routes>
+              <Route path="/" element={<Auth />} />
+              <Route path='/chat' element={<AppShell />} />
+              {/* <Route path='/forgotPassword' element={<ForgotPassword />} />
+              <Route path='/resetPassword' element={<ResetPassword />} /> */}
+            </Routes>
+          </HashRouter>
+        </UserRoleProvider>
       </AuthProvider>
     </ErrorBoundary>
   </React.StrictMode>

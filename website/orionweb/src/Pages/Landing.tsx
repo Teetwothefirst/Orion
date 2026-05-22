@@ -1,7 +1,11 @@
 import React, { useState } from 'react';
 import { Menu, X, Shield, Zap, Video, CheckCircle, ArrowRight } from 'lucide-react';
 
-const Landing: React.FC = () => {
+interface LandingProps {
+    onLaunchChat: () => void;
+}
+
+const Landing: React.FC<LandingProps> = ({ onLaunchChat }) => {
     const [isMenuOpen, setIsMenuOpen] = useState(false);
 
     return (
@@ -17,6 +21,12 @@ const Landing: React.FC = () => {
                 <div className="hidden md:flex items-center space-x-8">
                     <a href="#features" className="text-sm font-medium text-gray-600 hover:text-blue-600 transition-colors">Features</a>
                     <a href="#services" className="text-sm font-medium text-gray-600 hover:text-blue-600 transition-colors">Services</a>
+                    <button
+                        onClick={onLaunchChat}
+                        className="text-sm font-medium text-blue-600 hover:text-blue-700 transition-colors"
+                    >
+                        Web Chat
+                    </button>
                     <a href="#download" className="px-5 py-2.5 text-sm font-medium text-white bg-blue-600 rounded-full hover:bg-blue-700 transition-all shadow-md hover:shadow-lg hover:-translate-y-0.5 active:translate-y-0">
                         Download App
                     </a>
@@ -48,6 +58,15 @@ const Landing: React.FC = () => {
                         >
                             Services
                         </a>
+                        <button
+                            onClick={() => {
+                                onLaunchChat();
+                                setIsMenuOpen(false);
+                            }}
+                            className="flex items-center p-3 text-base font-medium text-blue-600 rounded-xl hover:bg-blue-50 transition-colors"
+                        >
+                            Web Chat
+                        </button>
                         <a
                             href="#download"
                             className="flex items-center justify-center p-3 mt-2 text-base font-bold text-white bg-blue-600 rounded-xl hover:bg-blue-700 transition-all shadow-sm"
@@ -83,10 +102,13 @@ const Landing: React.FC = () => {
                     </p>
 
                     <div className="flex flex-col sm:flex-row justify-center gap-4 animate-in fade-in text-white slide-in-from-bottom-10 duration-700 delay-300">
-                        <a href="#download" className="group px-8 py-4 text-lg font-bold text-white bg-blue-600 rounded-xl hover:bg-blue-700 shadow-lg hover:shadow-blue-500/30 transition-all transform hover:-translate-y-1 flex items-center justify-center gap-2">
-                            Get Started Free
+                        <button
+                            onClick={onLaunchChat}
+                            className="group px-8 py-4 text-lg font-bold text-white bg-blue-600 rounded-xl hover:bg-blue-700 shadow-lg hover:shadow-blue-500/30 transition-all transform hover:-translate-y-1 flex items-center justify-center gap-2"
+                        >
+                            Launch Web Chat
                             <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" />
-                        </a>
+                        </button>
                         <a href="#features" className="px-8 py-4 text-lg font-bold text-gray-700 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 hover:border-gray-300 shadow-sm hover:shadow-md transition-all transform hover:-translate-y-1">
                             Learn More
                         </a>
@@ -187,10 +209,21 @@ const Landing: React.FC = () => {
                 <div className="max-w-4xl mx-auto relative z-10">
                     <h2 className="text-4xl md:text-6xl font-bold mb-8 text-gray-900 tracking-tight">Ready to start chatting?</h2>
                     <p className="text-xl text-gray-600 mb-12 max-w-2xl mx-auto">
-                        Download OrionChat for your preferred platform and sync your conversations across all devices instantly.
+                        Download OrionChat for your preferred platform or use our web version to sync your conversations across all devices instantly.
                     </p>
 
                     <div className="md:flex flex-row justify-center gap-6">
+                        <div className="group p-8 bg-white rounded-3xl shadow-sm border border-gray-100 flex-1 max-w-sm mx-auto hover:-translate-y-2 transition-all duration-300 hover:shadow-xl">
+                            <h3 className="text-2xl font-bold mb-2 text-gray-900">Web Version</h3>
+                            <p className="text-gray-500 mb-8">No installation required</p>
+                            <button
+                                onClick={onLaunchChat}
+                                className="w-full py-3.5 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 transition flex items-center justify-center gap-2 group-hover:shadow-lg group-hover:shadow-blue-500/25"
+                            >
+                                <span>Launch Web Chat</span>
+                            </button>
+                        </div>
+
                         <div className="mb-3 group p-8 bg-white rounded-3xl shadow-sm border border-gray-100 flex-1 max-w-sm mx-auto hover:-translate-y-2 transition-all duration-300 hover:shadow-xl">
                             <h3 className="text-2xl font-bold mb-2 text-gray-900">Mobile</h3>
                             <p className="text-gray-500 mb-8">iOS & Android</p>
@@ -202,8 +235,8 @@ const Landing: React.FC = () => {
                         <div className="group p-8 bg-white rounded-3xl shadow-sm border border-gray-100 flex-1 max-w-sm mx-auto hover:-translate-y-2 transition-all duration-300 hover:shadow-xl">
                             <h3 className="text-2xl font-bold mb-2 text-gray-900">Desktop</h3>
                             <p className="text-gray-500 mb-8">macOS, Windows & Linux</p>
-                            <button className="w-full py-3.5 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 transition flex items-center justify-center gap-2 group-hover:shadow-lg group-hover:shadow-blue-500/25">
-                                <span>Download Desktop</span>
+                            <button className="w-full py-3.5 bg-gray-200 text-gray-600 rounded-xl font-bold hover:bg-gray-300 transition flex items-center justify-center gap-2">
+                                <span>Coming Soon</span>
                             </button>
                         </div>
                     </div>

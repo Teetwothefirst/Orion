@@ -11,6 +11,7 @@ import { Video, ResizeMode } from 'expo-av';
 import { Alert } from 'react-native';
 import MediaPicker from '@/components/chat/MediaPicker';
 import { encryptionServiceV2 as encryptionService } from '@/services/EncryptionServiceV2';
+import { localDb } from '@/services/LocalDatabaseService';
 
 interface Message {
     id: number;
@@ -59,6 +60,8 @@ export default function ChatRoomScreen() {
     useEffect(() => {
         if (!user || !id) return;
 
+        // Load from cache first
+        loadCachedMessages();
         fetchChatInfo();
         fetchMessages();
 
@@ -93,15 +96,19 @@ export default function ChatRoomScreen() {
                     socket.emit('message_read', { chatId: id, userId: user?.id });
                 }
 
-                setMessages((prev) => [...prev, {
-                    ...message,
-                    content: displayContent,
-                    type: message.type === 'encrypted' ? 'text' : message.type
-                }]);
-                scrollToBottom();
-            } catch (err) {
-                console.error('Error processing received message:', err);
-            }
+            setMessages((prev) => [...prev, {
+                ...message,
+                content: displayContent,
+                type: message.type === 'encrypted' ? 'text' : message.type
+            }]);
+            scrollToBottom();
+
+            // Background save to local cache
+            localDb.saveSingleMessage({
+                ...message,
+                content: displayContent,
+                type: message.type === 'encrypted' ? 'text' : message.type
+            } as any);
         });
 
         socket.on('status_update', (data: { messageId: number, status: string }) => {
@@ -147,6 +154,14 @@ export default function ChatRoomScreen() {
         socket.on('message_deleted', (data: { messageId: number, chatId: number }) => {
             console.log('Message deleted:', data);
             setMessages(prev => prev.filter(m => m.id !== data.messageId));
+        });
+
+        socket.on('group_deleted', (data: { chatId: number }) => {
+            if (data.chatId.toString() === id) {
+                Alert.alert('Group Deleted', 'This group has been deleted by an admin.');
+                localDb.deleteChat(data.chatId);
+                router.replace('/(tabs)');
+            }
         });
 
         socket.on('user_status', (data) => {
@@ -254,6 +269,40 @@ export default function ChatRoomScreen() {
         }
     };
 
+    const handleDeleteGroup = async () => {
+        Alert.alert(
+            'Delete Group',
+            'Are you sure you want to permanently delete this group? This action cannot be undone.',
+            [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                    text: 'Delete',
+                    style: 'destructive',
+                    onPress: async () => {
+                        try {
+                            await api.delete(`/chats/${id}?adminId=${user?.id}`);
+                            localDb.deleteChat(parseInt(id as string));
+                            setShowGroupInfo(false);
+                            // No need to redirect here, the socket event will handle it for all participants including the admin
+                        } catch (error: any) {
+                            Alert.alert('Error', error.response?.data || 'Failed to delete group');
+                        }
+                    }
+                }
+            ]
+        );
+    };
+
+    const loadCachedMessages = async () => {
+        if (!id) return;
+        const cached = await localDb.getCachedMessages(parseInt(id as string));
+        if (cached.length > 0) {
+            setMessages(cached as any);
+            setLoading(false);
+            scrollToBottom();
+        }
+    };
+
     const fetchMessages = async () => {
         try {
             const response = await api.get(`/chats/${id}/messages`);
@@ -296,6 +345,9 @@ export default function ChatRoomScreen() {
             setMessages(decryptedMessages);
             setLoading(false);
             scrollToBottom();
+
+            // Background update local cache
+            localDb.saveMessages(parseInt(id as string), decryptedMessages);
         } catch (error) {
             console.error('Error fetching messages:', error);
             setMessages([]);
@@ -858,7 +910,14 @@ export default function ChatRoomScreen() {
                                 {chatInfo?.invite_code && (
                                     <TouchableOpacity
                                         style={styles.inviteLinkContainer}
-                                        onPress={() => Alert.alert('Invite Code', chatInfo.invite_code)}
+                                        onPress={() => {
+                                            if (Platform.OS === 'web' && navigator?.clipboard) {
+                                                navigator.clipboard.writeText(chatInfo.invite_code);
+                                                Alert.alert('Copied!', `Invite code "${chatInfo.invite_code}" copied to clipboard.`);
+                                            } else {
+                                                Alert.alert('Invite Code', chatInfo.invite_code);
+                                            }
+                                        }}
                                     >
                                         <Text style={styles.inviteLinkText}>Invite Code: {chatInfo.invite_code}</Text>
                                         <Ionicons name="copy-outline" size={16} color="#007AFF" />
@@ -905,6 +964,15 @@ export default function ChatRoomScreen() {
                                     </View>
                                 </View>
                             ))}
+
+                            {(myRole === 'owner' || myRole === 'admin') && (
+                                <TouchableOpacity
+                                    style={[styles.adminActionBtn, { backgroundColor: '#FF3B30', marginTop: 30, paddingVertical: 15, alignItems: 'center' }]}
+                                    onPress={handleDeleteGroup}
+                                >
+                                    <Text style={[styles.adminActionText, { color: 'white', fontSize: 16 }]}>Delete Group</Text>
+                                </TouchableOpacity>
+                            )}
                             <View style={{ height: 40 }} />
                         </ScrollView>
                     </View>

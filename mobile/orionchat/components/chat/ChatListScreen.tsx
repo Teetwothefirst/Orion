@@ -5,6 +5,7 @@ import { useRouter } from 'expo-router';
 import { useAuth } from '@/context/AuthContext';
 import { api, socket } from '@/services/api';
 import NewChatModal from './NewChatModal';
+import { localDb } from '@/services/LocalDatabaseService';
 
 const { width } = Dimensions.get('window');
 
@@ -21,6 +22,8 @@ export default function ChatListScreen() {
 
     useEffect(() => {
         if (user) {
+            // Load from cache first
+            loadCachedChats();
             fetchChats();
 
             socket.on('user_status', (data) => {
@@ -77,10 +80,32 @@ export default function ChatListScreen() {
         }
     };
 
+    const loadCachedChats = async () => {
+        const cached = await localDb.getCachedChats();
+        if (cached.length > 0) {
+            setChats(cached);
+            setLoading(false);
+        }
+    };
+
     const fetchChats = async () => {
         try {
             const response = await api.get(`/chats?userId=${user?.id}`);
-            setChats(response.data);
+            const fetchedChats = response.data;
+            setChats(fetchedChats);
+
+            // Background update local cache
+            localDb.saveChats(fetchedChats.map((c: any) => ({
+                id: c.id,
+                type: c.type,
+                name: c.name,
+                updated_at: c.updated_at,
+                invite_code: c.invite_code,
+                other_user_id: c.other_user_id,
+                last_message: c.last_message,
+                last_message_type: c.last_message_type,
+                last_message_time: c.last_message_time
+            })));
         } catch (error) {
             console.error('Error fetching chats:', error);
         } finally {
@@ -102,14 +127,21 @@ export default function ChatListScreen() {
 
     const renderItem = ({ item }: { item: any }) => {
         const isOnline = item.type === 'private' && onlineUsers[item.other_user_id]?.status === 'online';
+        const isGroup = item.type !== 'private';
 
         return (
             <TouchableOpacity style={styles.chatItem} onPress={() => handleChatPress(item.id)}>
                 <View style={styles.avatarContainer}>
-                    <Image
-                        source={{ uri: item.avatar || 'https://i.pravatar.cc/100' }}
-                        style={styles.chatAvatar}
-                    />
+                    {isGroup ? (
+                        <View style={[styles.chatAvatar, styles.groupAvatarIcon]}>
+                            <Ionicons name="people" size={26} color="#fff" />
+                        </View>
+                    ) : (
+                        <Image
+                            source={{ uri: item.avatar || 'https://i.pravatar.cc/100' }}
+                            style={styles.chatAvatar}
+                        />
+                    )}
                     {isOnline && <View style={styles.onlineDot} />}
                 </View>
                 <View style={styles.chatInfo}>
@@ -196,6 +228,7 @@ export default function ChatListScreen() {
                 visible={showNewChatModal}
                 onClose={() => setShowNewChatModal(false)}
                 onUserSelect={handleStartChat}
+                initialMode={activeTab}
             />
 
             {/* Join Group Modal */}
@@ -283,6 +316,11 @@ const styles = StyleSheet.create({
         height: 50,
         borderRadius: 25,
         backgroundColor: '#333',
+    },
+    groupAvatarIcon: {
+        backgroundColor: '#007AFF',
+        justifyContent: 'center' as const,
+        alignItems: 'center' as const,
     },
     onlineDot: {
         position: 'absolute',

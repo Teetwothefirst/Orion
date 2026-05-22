@@ -12,6 +12,7 @@ const { v4: uuidv4 } = require('uuid');
 
 const allowedOrigins = [
   'http://localhost:5500',
+  'http://localhost:5173',
   'https://teetwothefirst.github.io'
 ];
 
@@ -20,13 +21,13 @@ const server = http.createServer(app);
 const io = socketIo(server, {
   cors: {
     // origin: "*",
-     origin: function (origin, callback) {
-    if (!origin || allowedOrigins.includes(origin)) {
-      callback(null, true);
-    } else {
-      callback(new Error('Not allowed by CORS'));
-    }
-  },
+    origin: function (origin, callback) {
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error('Not allowed by CORS'));
+      }
+    },
     methods: ["GET", "POST"]
   }
 });
@@ -35,7 +36,7 @@ const io = socketIo(server, {
 // app.use(cors());
 // Allow requests from your frontend origin
 app.use(cors({
- origin: function (origin, callback) {
+  origin: function (origin, callback) {
     if (!origin || allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
@@ -100,18 +101,18 @@ const createGroup = async (name, description, createdBy, members = []) => {
     admins: [createdBy], // Creator is automatically an admin
     is_active: true
   };
-  
+
   try {
     const { data, error } = await supabase
       .from('groups')
       .insert([group])
       .select();
-    
+
     if (error) {
       console.error('Error creating group:', error);
       return null;
     }
-    
+
     return data[0];
   } catch (err) {
     console.error('Error creating group:', err);
@@ -127,29 +128,29 @@ const addGroupMember = async (groupId, userId, addedBy) => {
       .select('*')
       .eq('id', groupId)
       .single();
-    
+
     if (fetchError || !group || !group.is_active) return null;
-    
+
     // Check if the person adding is an admin
     if (!group.admins.includes(addedBy)) return null;
-    
+
     // Check if user is already a member
     if (group.members.includes(userId)) return group;
-    
+
     // Update members array
     const updatedMembers = [...group.members, userId];
-    
+
     const { data, error } = await supabase
       .from('groups')
       .update({ members: updatedMembers })
       .eq('id', groupId)
       .select();
-    
+
     if (error) {
       console.error('Error adding group member:', error);
       return null;
     }
-    
+
     return data[0];
   } catch (err) {
     console.error('Error adding group member:', err);
@@ -165,33 +166,33 @@ const removeGroupMember = async (groupId, userId, removedBy) => {
       .select('*')
       .eq('id', groupId)
       .single();
-    
+
     if (fetchError || !group || !group.is_active) return null;
-    
+
     // Check if the person removing is an admin or removing themselves
     if (!group.admins.includes(removedBy) && removedBy !== userId) return null;
-    
+
     // Can't remove the creator
     if (userId === group.created_by) return null;
-    
+
     // Update members and admins arrays
     const updatedMembers = group.members.filter(m => m !== userId);
     const updatedAdmins = group.admins.filter(a => a !== userId);
-    
+
     const { data, error } = await supabase
       .from('groups')
-      .update({ 
+      .update({
         members: updatedMembers,
         admins: updatedAdmins
       })
       .eq('id', groupId)
       .select();
-    
+
     if (error) {
       console.error('Error removing group member:', error);
       return null;
     }
-    
+
     return data[0];
   } catch (err) {
     console.error('Error removing group member:', err);
@@ -206,12 +207,12 @@ const getUserGroups = async (userId) => {
       .select('*')
       .contains('members', [userId])
       .eq('is_active', true);
-    
+
     if (error) {
       console.error('Error fetching user groups:', error);
       return [];
     }
-    
+
     return data || [];
   } catch (err) {
     console.error('Error fetching user groups:', err);
@@ -221,11 +222,11 @@ const getUserGroups = async (userId) => {
 
 const authenticateSocket = async (socket, next) => {
   const sessionId = socket.handshake.auth.sessionId;
-  
+
   if (!sessionId) {
     return next(new Error('Authentication failed'));
   }
-  
+
   try {
     // Check session in database
     const { data: sessionData, error: sessionError } = await supabase
@@ -233,22 +234,22 @@ const authenticateSocket = async (socket, next) => {
       .select('user_id')
       .eq('session_id', sessionId)
       .single();
-    
+
     if (sessionError || !sessionData) {
       return next(new Error('Authentication failed'));
     }
-    
+
     // Get user from database
     const { data: user, error: userError } = await supabase
       .from('users')
       .select('*')
       .eq('id', sessionData.user_id)
       .single();
-    
+
     if (userError || !user) {
       return next(new Error('User not found'));
     }
-    
+
     socket.userId = user.id;
     socket.user = user;
     next();
@@ -271,22 +272,23 @@ app.post('/api/register', async (req, res) => {
       .select('id')
       .or(`username.eq.${username},email.eq.${email}`)
       .limit(1);
-    
+
     if (checkError) {
-      return res.status(500).json({ error: 'Database error' });
+      console.error('Check user error:', checkError);
+      return res.status(500).json({ error: 'Database error: ' + checkError.message });
     }
-    
+
     if (existingUser && existingUser.length > 0) {
-      return res.status(400).json({ 
-        error: 'User with this username or email already exists' 
+      return res.status(400).json({
+        error: 'User with this username or email already exists'
       });
     }
-    
+
     // Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
-    
+
     // //Send them a welcome
-      var transporter = nodemailer.createTransport({
+    var transporter = nodemailer.createTransport({
       service: 'gmail',
       auth: {
         user: 'teetwothefirst@gmail.com',
@@ -297,15 +299,15 @@ app.post('/api/register', async (req, res) => {
         rejectUnauthorized: false // <-- Ignore self-signed certs
       }
     });
-    
+
     var mailOptions = {
       from: 'teetwothefirst@gmail.com',
       to: email,
       subject: 'Welcome to Orion Chat',
       html: htmlContent,
     };
-    
-    transporter.sendMail(mailOptions, function(error, info){
+
+    transporter.sendMail(mailOptions, function (error, info) {
       if (error) {
         console.log(error);
       } else {
@@ -324,20 +326,20 @@ app.post('/api/register', async (req, res) => {
       created_at: new Date(),
       is_online: false
     };
-    
+
     const { data, error } = await supabase
       .from('users')
       .insert([user])
       .select();
-    
+
     if (error) {
-        console.error('Supabase insert error:', error);
-        return res.status(500).json({ error: 'Failed to create user' });
+      console.error('Supabase insert error:', error);
+      return res.status(500).json({ error: 'Failed to create user: ' + error.message });
     }
-    
-    res.status(201).json({ 
+
+    res.status(201).json({
       message: 'User registered successfully',
-      userId: userId 
+      userId: userId
     });
   } catch (error) {
     console.error('Registration error:', error);
@@ -348,9 +350,9 @@ app.post('/api/register', async (req, res) => {
 app.post('/api/login', async (req, res) => {
   console.log('Incoming login request body:', req.body);
 
-    try {
+  try {
     const { username, password } = req.body;
-    
+
     //Supabase Find User
     const { data: user, error } = await supabase
       .from('users')
@@ -361,14 +363,14 @@ app.post('/api/login', async (req, res) => {
     if (error || !user) {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
-    
+
     // Verify password
     const isValidPassword = await bcrypt.compare(password, user.password);
-    
+
     if (!isValidPassword) {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
-    
+
     // Create session
     const sessionId = generateSessionId();
 
@@ -378,18 +380,18 @@ app.post('/api/login', async (req, res) => {
       .insert([
         { session_id: sessionId, user_id: user.id, created_at: new Date() }
       ]);
-    
+
     if (sessionError) {
-        console.error('Supabase session insert error:', sessionError);
+      console.error('Supabase session insert error:', sessionError);
       return res.status(500).json({ error: 'Failed to create session' });
     }
-    
+
     // Update user online status
     await supabase
       .from('users')
       .update({ is_online: true })
       .eq('id', user.id);
-    
+
     res.json({
       message: 'Login successful',
       sessionId,
@@ -408,28 +410,28 @@ app.post('/api/login', async (req, res) => {
 app.post('/api/logout', async (req, res) => {
   try {
     const { sessionId } = req.body;
-    
+
     // Get user from session
     const { data: sessionData } = await supabase
       .from('sessions')
       .select('user_id')
       .eq('session_id', sessionId)
       .single();
-    
+
     if (sessionData) {
       // Update user online status
       await supabase
         .from('users')
         .update({ is_online: false })
         .eq('id', sessionData.user_id);
-      
+
       // Delete session
       await supabase
         .from('sessions')
         .delete()
         .eq('session_id', sessionId);
     }
-    
+
     res.json({ message: 'Logout successful' });
   } catch (error) {
     console.error('Logout error:', error);
@@ -441,34 +443,34 @@ app.post('/api/logout', async (req, res) => {
 app.get('/api/users', async (req, res) => {
   try {
     const sessionId = req.headers.authorization?.replace('Bearer ', '');
-    
+
     if (!sessionId) {
       return res.status(401).json({ error: 'Unauthorized' });
     }
-    
+
     // Verify session
     const { data: sessionData, error: sessionError } = await supabase
       .from('sessions')
       .select('user_id')
       .eq('session_id', sessionId)
       .single();
-    
+
     if (sessionError || !sessionData) {
       return res.status(401).json({ error: 'Unauthorized' });
     }
-    
+
     const currentUserId = sessionData.user_id;
-    
+
     // Get all users except current user
     const { data: users, error } = await supabase
       .from('users')
       .select('id, username, is_online')
       .neq('id', currentUserId);
-    
+
     if (error) {
       return res.status(500).json({ error: 'Failed to fetch users' });
     }
-    
+
     res.json({ users: users || [] });
   } catch (error) {
     console.error('Get users error:', error);
@@ -480,37 +482,37 @@ app.get('/api/users', async (req, res) => {
 app.get('/api/messages/:targetUserId', async (req, res) => {
   try {
     const sessionId = req.headers.authorization?.replace('Bearer ', '');
-    
+
     if (!sessionId) {
       return res.status(401).json({ error: 'Unauthorized' });
     }
-    
+
     // Verify session
     const { data: sessionData, error: sessionError } = await supabase
       .from('sessions')
       .select('user_id')
       .eq('session_id', sessionId)
       .single();
-    
+
     if (sessionError || !sessionData) {
       return res.status(401).json({ error: 'Unauthorized' });
     }
-    
+
     const currentUserId = sessionData.user_id;
     const targetUserId = req.params.targetUserId;
     const roomId = createRoomId(currentUserId, targetUserId);
-    
+
     // Get messages from database
     const { data: messages, error } = await supabase
       .from('private_messages')
       .select('*')
       .eq('room_id', roomId)
       .order('timestamp', { ascending: true });
-    
+
     if (error) {
       return res.status(500).json({ error: 'Failed to fetch messages' });
     }
-    
+
     res.json({ messages: messages || [] });
   } catch (error) {
     console.error('Get messages error:', error);
@@ -524,51 +526,51 @@ app.get('/api/messages/:targetUserId', async (req, res) => {
 // app.post('/api/groups', async (req, res) => {
 //   try {
 //     const sessionId = req.headers.authorization?.replace('Bearer ', '');
-    
+
 //     if (!sessionId) {
 //       return res.status(401).json({ error: 'Unauthorized' });
 //     }
-    
+
 //     // Verify session
 //     const { data: sessionData, error: sessionError } = await supabase
 //       .from('sessions')
 //       .select('user_id')
 //       .eq('session_id', sessionId)
 //       .single();
-    
+
 //     if (sessionError || !sessionData) {
 //       return res.status(401).json({ error: 'Unauthorized' });
 //     }
-    
+
 //     const currentUserId = sessionData.user_id;
 //     const { name, description, members = [] } = req.body;
-    
+
 //     if (!name || name.trim().length === 0) {
 //       return res.status(400).json({ error: 'Group name is required' });
 //     }
-    
+
 //     if (name.trim().length > 50) {
 //       return res.status(400).json({ error: 'Group name must be 50 characters or less' });
 //     }
-    
+
 //     // Validate that all members exist
 //     if (members.length > 0) {
 //       const { data: existingUsers } = await supabase
 //         .from('users')
 //         .select('id')
 //         .in('id', members);
-      
+
 //       const validMembers = existingUsers ? existingUsers.map(u => u.id) : [];
 //     } else {
 //       const validMembers = [];
 //     }
-    
+
 //     const group = await createGroup(name, description, currentUserId, validMembers);
-    
+
 //     if (!group) {
 //       return res.status(500).json({ error: 'Failed to create group' });
 //     }
-    
+
 //     res.status(201).json({ 
 //       message: 'Group created successfully',
 //       group: {
@@ -591,32 +593,32 @@ app.get('/api/messages/:targetUserId', async (req, res) => {
 // app.get('/api/groups', async (req, res) => {
 //   try {
 //     const sessionId = req.headers.authorization?.replace('Bearer ', '');
-    
+
 //     if (!sessionId) {
 //       return res.status(401).json({ error: 'Unauthorized' });
 //     }
-    
+
 //     // Verify session
 //     const { data: sessionData, error: sessionError } = await supabase
 //       .from('sessions')
 //       .select('user_id')
 //       .eq('session_id', sessionId)
 //       .single();
-    
+
 //     if (sessionError || !sessionData) {
 //       return res.status(401).json({ error: 'Unauthorized' });
 //     }
-    
+
 //     const currentUserId = sessionData.user_id;
 //     const userGroups = await getUserGroups(currentUserId);
-    
+
 //     // Get member details for each group
 //     const groupsWithDetails = await Promise.all(userGroups.map(async (group) => {
 //       const { data: memberDetails } = await supabase
 //         .from('users')
 //         .select('id, username, is_online')
 //         .in('id', group.members);
-      
+
 //       return {
 //         id: group.id,
 //         name: group.name,
@@ -628,7 +630,7 @@ app.get('/api/messages/:targetUserId', async (req, res) => {
 //         isAdmin: group.admins.includes(currentUserId)
 //       };
 //     }));
-    
+
 //     res.json({ groups: groupsWithDetails });
 //   } catch (error) {
 //     console.error('Get groups error:', error);
@@ -640,43 +642,43 @@ app.get('/api/messages/:targetUserId', async (req, res) => {
 // app.post('/api/groups/:groupId/members', async (req, res) => {
 //   try {
 //     const sessionId = req.headers.authorization?.replace('Bearer ', '');
-    
+
 //     if (!sessionId) {
 //       return res.status(401).json({ error: 'Unauthorized' });
 //     }
-    
+
 //     // Verify session
 //     const { data: sessionData, error: sessionError } = await supabase
 //       .from('sessions')
 //       .select('user_id')
 //       .eq('session_id', sessionId)
 //       .single();
-    
+
 //     if (sessionError || !sessionData) {
 //       return res.status(401).json({ error: 'Unauthorized' });
 //     }
-    
+
 //     const currentUserId = sessionData.user_id;
 //     const { groupId } = req.params;
 //     const { userId } = req.body;
-    
+
 //     // Check if user exists
 //     const { data: user, error: userError } = await supabase
 //       .from('users')
 //       .select('id')
 //       .eq('id', userId)
 //       .single();
-    
+
 //     if (userError || !user) {
 //       return res.status(404).json({ error: 'User not found' });
 //     }
-    
+
 //     const updatedGroup = await addGroupMember(groupId, userId, currentUserId);
-    
+
 //     if (!updatedGroup) {
 //       return res.status(403).json({ error: 'Not authorized to add members or group not found' });
 //     }
-    
+
 //     res.json({ 
 //       message: 'Member added successfully',
 //       group: updatedGroup
@@ -691,31 +693,31 @@ app.get('/api/messages/:targetUserId', async (req, res) => {
 // app.delete('/api/groups/:groupId/members/:userId', async (req, res) => {
 //   try {
 //     const sessionId = req.headers.authorization?.replace('Bearer ', '');
-    
+
 //     if (!sessionId) {
 //       return res.status(401).json({ error: 'Unauthorized' });
 //     }
-    
+
 //     // Verify session
 //     const { data: sessionData, error: sessionError } = await supabase
 //       .from('sessions')
 //       .select('user_id')
 //       .eq('session_id', sessionId)
 //       .single();
-    
+
 //     if (sessionError || !sessionData) {
 //       return res.status(401).json({ error: 'Unauthorized' });
 //     }
-    
+
 //     const currentUserId = sessionData.user_id;
 //     const { groupId, userId } = req.params;
-    
+
 //     const updatedGroup = await removeGroupMember(groupId, userId, currentUserId);
-    
+
 //     if (!updatedGroup) {
 //       return res.status(403).json({ error: 'Not authorized to remove members or invalid operation' });
 //     }
-    
+
 //     res.json({ 
 //       message: 'Member removed successfully',
 //       group: updatedGroup
@@ -730,47 +732,47 @@ app.get('/api/messages/:targetUserId', async (req, res) => {
 // app.get('/api/groups/:groupId/messages', async (req, res) => {
 //   try {
 //     const sessionId = req.headers.authorization?.replace('Bearer ', '');
-    
+
 //     if (!sessionId) {
 //       return res.status(401).json({ error: 'Unauthorized' });
 //     }
-    
+
 //     // Verify session
 //     const { data: sessionData, error: sessionError } = await supabase
 //       .from('sessions')
 //       .select('user_id')
 //       .eq('session_id', sessionId)
 //       .single();
-    
+
 //     if (sessionError || !sessionData) {
 //       return res.status(401).json({ error: 'Unauthorized' });
 //     }
-    
+
 //     const currentUserId = sessionData.user_id;
 //     const { groupId } = req.params;
-    
+
 //     // Check if user is member of group
 //     const { data: group, error: groupError } = await supabase
 //       .from('groups')
 //       .select('members')
 //       .eq('id', groupId)
 //       .single();
-    
+
 //     if (groupError || !group || !group.members.includes(currentUserId)) {
 //       return res.status(403).json({ error: 'Not authorized to view group messages' });
 //     }
-    
+
 //     // Get group messages
 //     const { data: messages, error } = await supabase
 //       .from('group_messages')
 //       .select('*')
 //       .eq('group_id', groupId)
 //       .order('timestamp', { ascending: true });
-    
+
 //     if (error) {
 //       return res.status(500).json({ error: 'Failed to fetch group messages' });
 //     }
-    
+
 //     res.json({ messages: messages || [] });
 //   } catch (error) {
 //     console.error('Get group messages error:', error);
@@ -789,7 +791,7 @@ app.post('/api/groups', async (req, res) => {
     }
 
     const { name, description, isPublic = false, selectedUsers = [] } = req.body;
-    
+
     if (!name || name.trim().length === 0) {
       return res.status(400).json({ error: 'Group name is required' });
     }
@@ -973,7 +975,7 @@ app.get('/api/groups/:groupId', async (req, res) => {
       return res.status(500).json({ error: 'Failed to fetch group members' });
     }
 
-    res.json({ 
+    res.json({
       group,
       members: members.map(m => ({
         id: m.user_id,
@@ -1171,49 +1173,49 @@ io.use(authenticateSocket);
 
 io.on('connection', (socket) => {
   console.log(`User ${socket.user.username} connected`);
-  
+
   // Store active user
   activeUsers.set(socket.id, {
     userId: socket.userId,
     username: socket.user.username,
     socketId: socket.id
   });
-  
+
   // Update user online status in database
   supabase
     .from('users')
     .update({ is_online: true })
     .eq('id', socket.userId);
-  
+
   // Notify other users that this user is online
   socket.broadcast.emit('userOnline', {
     userId: socket.userId,
     username: socket.user.username
   });
-  
+
   // Join user to their personal room
   socket.join(socket.userId);
-  
+
   // Handle private message
   socket.on('privateMessage', async (data) => {
     try {
       const { targetUserId, message, timestamp } = data;
-      
+
       // Validate target user exists
       const { data: targetUser, error: userError } = await supabase
         .from('users')
         .select('id')
         .eq('id', targetUserId)
         .single();
-      
+
       if (userError || !targetUser) {
         socket.emit('error', { message: 'Target user not found' });
         return;
       }
-      
+
       // Create room ID for this conversation
       const roomId = createRoomId(socket.userId, targetUserId);
-      
+
       // Create message object
       const messageObj = {
         id: uuidv4(),
@@ -1224,31 +1226,31 @@ io.on('connection', (socket) => {
         timestamp: timestamp || new Date(),
         room_id: roomId
       };
-      
+
       // Store message in database
       const { error: insertError } = await supabase
         .from('private_messages')
         .insert([messageObj]);
-      
+
       if (insertError) {
         console.error('Error storing private message:', insertError);
         socket.emit('error', { message: 'Failed to send message' });
         return;
       }
-      
+
       // Send message to target user if they're online
       socket.to(targetUserId).emit('newPrivateMessage', messageObj);
-      
+
       // Confirm message sent to sender
       socket.emit('messageSent', messageObj);
-      
+
       console.log(`Message from ${socket.user.username} to user ${targetUserId}: ${message}`);
     } catch (error) {
       console.error('Private message error:', error);
       socket.emit('error', { message: 'Failed to send message' });
     }
   });
-  
+
   // Handle typing indicators
   socket.on('typing', (data) => {
     const { targetUserId, isTyping } = data;
@@ -1258,349 +1260,349 @@ io.on('connection', (socket) => {
       isTyping
     });
   });
-  
+
   // Handle joining a specific chat room
-//   socket.on('joinChat', async (data) => {
-//     try {
-//       const { targetUserId } = data;
-//       const roomId = createRoomId(socket.userId, targetUserId);
-//       socket.join(roomId);
-      
-//       // Send chat history from database
-//       const { data: chatHistory, error } = await supabase
-//         .from('private_messages')
-//         .select('*')
-//         .eq('room_id', roomId)
-//         .order('timestamp', { ascending: true });
-      
-//       if (!error) {
-//         socket.emit('chatHistory', { messages: chatHistory || [] });
-//       }
-//     } catch (error) {
-//       console.error('Join chat error:', error);
-//     }
-//   });
-  
-//   // Handle joining a group
-//   socket.on('joinGroup', async (data) => {
-//     try {
-//       const { groupId } = data;
-      
-//       // Check if user is member of group
-//       const { data: group, error: groupError } = await supabase
-//         .from('groups')
-//         .select('members')
-//         .eq('id', groupId)
-//         .single();
-      
-//       if (groupError || !group || !group.members.includes(socket.userId)) {
-//         socket.emit('error', { message: 'Not authorized to join this group' });
-//         return;
-//       }
-      
-//       socket.join(groupId);
-      
-//       // Send group message history from database
-//       const { data: groupHistory, error } = await supabase
-//         .from('group_messages')
-//         .select('*')
-//         .eq('group_id', groupId)
-//         .order('timestamp', { ascending: true });
-      
-//       if (!error) {
-//         socket.emit('groupHistory', { groupId, messages: groupHistory || [] });
-//       }
-//     } catch (error) {
-//       console.error('Join group error:', error);
-//     }
-//   });
-  
-//   // Handle group message
-//   socket.on('groupMessage', async (data) => {
-//     try {
-//       const { groupId, message, timestamp } = data;
-      
-//       // Check if user is member of group
-//       const { data: group, error: groupError } = await supabase
-//         .from('groups')
-//         .select('members')
-//         .eq('id', groupId)
-//         .single();
-      
-//       if (groupError || !group || !group.members.includes(socket.userId)) {
-//         socket.emit('error', { message: 'Not authorized to send messages to this group' });
-//         return;
-//       }
-      
-//       // Create message object
-//       const messageObj = {
-//         id: Date.now().toString(),
-//         sender_id: socket.userId,
-//         sender_username: socket.user.username,
-//         group_id: groupId,
-//         message,
-//         timestamp: timestamp || new Date(),
-//         type: 'group'
-//       };
-      
-//       // Store message in database
-//       const { error: insertError } = await supabase
-//         .from('group_messages')
-//         .insert([messageObj]);
-      
-//       if (insertError) {
-//         console.error('Error storing group message:', insertError);
-//         socket.emit('error', { message: 'Failed to send message' });
-//         return;
-//       }
-//     }catch(error){
-//         console.log(error)
-//     }
-// })
+  //   socket.on('joinChat', async (data) => {
+  //     try {
+  //       const { targetUserId } = data;
+  //       const roomId = createRoomId(socket.userId, targetUserId);
+  //       socket.join(roomId);
+
+  //       // Send chat history from database
+  //       const { data: chatHistory, error } = await supabase
+  //         .from('private_messages')
+  //         .select('*')
+  //         .eq('room_id', roomId)
+  //         .order('timestamp', { ascending: true });
+
+  //       if (!error) {
+  //         socket.emit('chatHistory', { messages: chatHistory || [] });
+  //       }
+  //     } catch (error) {
+  //       console.error('Join chat error:', error);
+  //     }
+  //   });
+
+  //   // Handle joining a group
+  //   socket.on('joinGroup', async (data) => {
+  //     try {
+  //       const { groupId } = data;
+
+  //       // Check if user is member of group
+  //       const { data: group, error: groupError } = await supabase
+  //         .from('groups')
+  //         .select('members')
+  //         .eq('id', groupId)
+  //         .single();
+
+  //       if (groupError || !group || !group.members.includes(socket.userId)) {
+  //         socket.emit('error', { message: 'Not authorized to join this group' });
+  //         return;
+  //       }
+
+  //       socket.join(groupId);
+
+  //       // Send group message history from database
+  //       const { data: groupHistory, error } = await supabase
+  //         .from('group_messages')
+  //         .select('*')
+  //         .eq('group_id', groupId)
+  //         .order('timestamp', { ascending: true });
+
+  //       if (!error) {
+  //         socket.emit('groupHistory', { groupId, messages: groupHistory || [] });
+  //       }
+  //     } catch (error) {
+  //       console.error('Join group error:', error);
+  //     }
+  //   });
+
+  //   // Handle group message
+  //   socket.on('groupMessage', async (data) => {
+  //     try {
+  //       const { groupId, message, timestamp } = data;
+
+  //       // Check if user is member of group
+  //       const { data: group, error: groupError } = await supabase
+  //         .from('groups')
+  //         .select('members')
+  //         .eq('id', groupId)
+  //         .single();
+
+  //       if (groupError || !group || !group.members.includes(socket.userId)) {
+  //         socket.emit('error', { message: 'Not authorized to send messages to this group' });
+  //         return;
+  //       }
+
+  //       // Create message object
+  //       const messageObj = {
+  //         id: Date.now().toString(),
+  //         sender_id: socket.userId,
+  //         sender_username: socket.user.username,
+  //         group_id: groupId,
+  //         message,
+  //         timestamp: timestamp || new Date(),
+  //         type: 'group'
+  //       };
+
+  //       // Store message in database
+  //       const { error: insertError } = await supabase
+  //         .from('group_messages')
+  //         .insert([messageObj]);
+
+  //       if (insertError) {
+  //         console.error('Error storing group message:', insertError);
+  //         socket.emit('error', { message: 'Failed to send message' });
+  //         return;
+  //       }
+  //     }catch(error){
+  //         console.log(error)
+  //     }
+  // })
 
 
-// //  
-//   // Handle group typing indicators
-//   socket.on('groupTyping', (data) => {
-//     const { groupId, isTyping } = data;
-//     const group = groups.get(groupId);
-    
-//     if (!group || !group.members.includes(socket.userId)) {
-//       return;
-//     }
-    
-//     socket.to(groupId).emit('groupUserTyping', {
-//       userId: socket.userId,
-//       username: socket.user.username,
-//       groupId,
-//       isTyping
-//     });
-//   });
-  
-//   // Handle group member updates
-//   socket.on('groupMemberAdded', (data) => {
-//     const { groupId, newMemberId } = data;
-//     const group = groups.get(groupId);
-    
-//     if (group && group.members.includes(newMemberId)) {
-//       // Notify all group members about new member
-//       io.to(groupId).emit('groupMemberUpdate', {
-//         type: 'memberAdded',
-//         groupId,
-//         userId: newMemberId,
-//         group: group
-//       });
-      
-//       // If the new member is online, make them join the room
-//       const newMemberSocket = Array.from(activeUsers.entries())
-//         .find(([socketId, user]) => user.userId === newMemberId);
-      
-//       if (newMemberSocket) {
-//         io.sockets.sockets.get(newMemberSocket[0])?.join(groupId);
-//       }
-//     }
-//   });
-  
-//   socket.on('groupMemberRemoved', (data) => {
-//     const { groupId, removedMemberId } = data;
-    
-//     // Notify all group members about removed member
-//     io.to(groupId).emit('groupMemberUpdate', {
-//       type: 'memberRemoved',
-//       groupId,
-//       userId: removedMemberId
-//     });
-    
-//     // Remove the user from the socket room
-//     const removedMemberSocket = Array.from(activeUsers.entries())
-//       .find(([socketId, user]) => user.userId === removedMemberId);
-    
-//     if (removedMemberSocket) {
-//       io.sockets.sockets.get(removedMemberSocket[0])?.leave(groupId);
-//     }
-//   });
-  
-// Join group rooms when user connects
-socket.on('joinUserGroupRooms', async () => {
-  try {
-    if (!socket.userId) return;
+  // //  
+  //   // Handle group typing indicators
+  //   socket.on('groupTyping', (data) => {
+  //     const { groupId, isTyping } = data;
+  //     const group = groups.get(groupId);
 
-    // Get all groups the user belongs to
-    const { data: userGroups, error } = await supabase
-      .from('group_members')
-      .select('group_id')
-      .eq('user_id', socket.userId)
-      .eq('status', 'active');
+  //     if (!group || !group.members.includes(socket.userId)) {
+  //       return;
+  //     }
 
-    if (error) {
-      console.error('Error fetching user groups:', error);
-      return;
+  //     socket.to(groupId).emit('groupUserTyping', {
+  //       userId: socket.userId,
+  //       username: socket.user.username,
+  //       groupId,
+  //       isTyping
+  //     });
+  //   });
+
+  //   // Handle group member updates
+  //   socket.on('groupMemberAdded', (data) => {
+  //     const { groupId, newMemberId } = data;
+  //     const group = groups.get(groupId);
+
+  //     if (group && group.members.includes(newMemberId)) {
+  //       // Notify all group members about new member
+  //       io.to(groupId).emit('groupMemberUpdate', {
+  //         type: 'memberAdded',
+  //         groupId,
+  //         userId: newMemberId,
+  //         group: group
+  //       });
+
+  //       // If the new member is online, make them join the room
+  //       const newMemberSocket = Array.from(activeUsers.entries())
+  //         .find(([socketId, user]) => user.userId === newMemberId);
+
+  //       if (newMemberSocket) {
+  //         io.sockets.sockets.get(newMemberSocket[0])?.join(groupId);
+  //       }
+  //     }
+  //   });
+
+  //   socket.on('groupMemberRemoved', (data) => {
+  //     const { groupId, removedMemberId } = data;
+
+  //     // Notify all group members about removed member
+  //     io.to(groupId).emit('groupMemberUpdate', {
+  //       type: 'memberRemoved',
+  //       groupId,
+  //       userId: removedMemberId
+  //     });
+
+  //     // Remove the user from the socket room
+  //     const removedMemberSocket = Array.from(activeUsers.entries())
+  //       .find(([socketId, user]) => user.userId === removedMemberId);
+
+  //     if (removedMemberSocket) {
+  //       io.sockets.sockets.get(removedMemberSocket[0])?.leave(groupId);
+  //     }
+  //   });
+
+  // Join group rooms when user connects
+  socket.on('joinUserGroupRooms', async () => {
+    try {
+      if (!socket.userId) return;
+
+      // Get all groups the user belongs to
+      const { data: userGroups, error } = await supabase
+        .from('group_members')
+        .select('group_id')
+        .eq('user_id', socket.userId)
+        .eq('status', 'active');
+
+      if (error) {
+        console.error('Error fetching user groups:', error);
+        return;
+      }
+
+      // Join all group rooms
+      userGroups.forEach(membership => {
+        const roomName = `group_${membership.group_id}`;
+        socket.join(roomName);
+        console.log(`User ${socket.user?.username} joined group room: ${roomName}`);
+      });
+    } catch (error) {
+      console.error('Error joining user group rooms:', error);
     }
+  });
 
-    // Join all group rooms
-    userGroups.forEach(membership => {
-      const roomName = `group_${membership.group_id}`;
+  // Handle group messages
+  socket.on('groupMessage', async (data) => {
+    try {
+      const { groupId, message, timestamp } = data;
+
+      if (!socket.userId || !groupId || !message) {
+        socket.emit('error', { message: 'Invalid group message data' });
+        return;
+      }
+
+      // Verify user is a member of the group
+      const { data: membership, error: memberError } = await supabase
+        .from('group_members')
+        .select('id')
+        .eq('group_id', groupId)
+        .eq('user_id', socket.userId)
+        .eq('status', 'active')
+        .single();
+
+      if (memberError || !membership) {
+        socket.emit('error', { message: 'Access denied to this group' });
+        return;
+      }
+
+      // Create message object
+      const messageObj = {
+        id: uuidv4(),
+        group_id: groupId,
+        sender_id: socket.userId,
+        content: message.trim(),
+        message_type: 'text',
+        sent_at: timestamp || new Date()
+      };
+
+      // Store message in database
+      const { error: insertError } = await supabase
+        .from('group_messages')
+        .insert([messageObj]);
+
+      if (insertError) {
+        console.error('Error storing group message:', insertError);
+        socket.emit('error', { message: 'Failed to send message' });
+        return;
+      }
+
+      // Add sender username to message
+      messageObj.sender_username = socket.user.username;
+
+      // Broadcast to all group members
+      const roomName = `group_${groupId}`;
+      io.to(roomName).emit('newGroupMessage', messageObj);
+
+      console.log(`Group message in ${roomName} from ${socket.user.username}: ${message}`);
+    } catch (error) {
+      console.error('Group message error:', error);
+      socket.emit('error', { message: 'Failed to send group message' });
+    }
+  });
+
+  // Handle joining specific group room (when user opens a group chat)
+  socket.on('joinGroupRoom', async (data) => {
+    try {
+      const { groupId } = data;
+
+      if (!groupId || !socket.userId) return;
+
+      // Verify membership
+      const { data: membership, error } = await supabase
+        .from('group_members')
+        .select('id')
+        .eq('group_id', groupId)
+        .eq('user_id', socket.userId)
+        .eq('status', 'active')
+        .single();
+
+      if (error || !membership) {
+        socket.emit('error', { message: 'Access denied to this group' });
+        return;
+      }
+
+      const roomName = `group_${groupId}`;
       socket.join(roomName);
-      console.log(`User ${socket.user?.username} joined group room: ${roomName}`);
-    });
-  } catch (error) {
-    console.error('Error joining user group rooms:', error);
-  }
-});
 
-// Handle group messages
-socket.on('groupMessage', async (data) => {
-  try {
-    const { groupId, message, timestamp } = data;
+      // Notify others that user is active in this group
+      socket.to(roomName).emit('userJoinedGroupRoom', {
+        userId: socket.userId,
+        username: socket.user.username,
+        groupId
+      });
 
-    if (!socket.userId || !groupId || !message) {
-      socket.emit('error', { message: 'Invalid group message data' });
-      return;
+      console.log(`${socket.user.username} joined group room: ${roomName}`);
+    } catch (error) {
+      console.error('Error joining group room:', error);
     }
+  });
 
-    // Verify user is a member of the group
-    const { data: membership, error: memberError } = await supabase
-      .from('group_members')
-      .select('id')
-      .eq('group_id', groupId)
-      .eq('user_id', socket.userId)
-      .eq('status', 'active')
-      .single();
+  // Handle leaving group room (when user closes group chat)
+  socket.on('leaveGroupRoom', (data) => {
+    try {
+      const { groupId } = data;
 
-    if (memberError || !membership) {
-      socket.emit('error', { message: 'Access denied to this group' });
-      return;
+      if (!groupId) return;
+
+      const roomName = `group_${groupId}`;
+      socket.leave(roomName);
+
+      // Notify others that user left the group room
+      socket.to(roomName).emit('userLeftGroupRoom', {
+        userId: socket.userId,
+        username: socket.user?.username,
+        groupId
+      });
+
+      console.log(`${socket.user?.username} left group room: ${roomName}`);
+    } catch (error) {
+      console.error('Error leaving group room:', error);
     }
+  });
 
-    // Create message object
-    const messageObj = {
-      id: uuidv4(),
-      group_id: groupId,
-      sender_id: socket.userId,
-      content: message.trim(),
-      message_type: 'text',
-      sent_at: timestamp || new Date()
-    };
+  // Handle group typing indicators
+  socket.on('typingInGroup', (data) => {
+    try {
+      const { groupId, isTyping } = data;
 
-    // Store message in database
-    const { error: insertError } = await supabase
-      .from('group_messages')
-      .insert([messageObj]);
+      if (!groupId || !socket.userId) return;
 
-    if (insertError) {
-      console.error('Error storing group message:', insertError);
-      socket.emit('error', { message: 'Failed to send message' });
-      return;
+      const roomName = `group_${groupId}`;
+      socket.to(roomName).emit('userTypingInGroup', {
+        userId: socket.userId,
+        username: socket.user?.username,
+        groupId,
+        isTyping
+      });
+    } catch (error) {
+      console.error('Error handling group typing:', error);
     }
-
-    // Add sender username to message
-    messageObj.sender_username = socket.user.username;
-
-    // Broadcast to all group members
-    const roomName = `group_${groupId}`;
-    io.to(roomName).emit('newGroupMessage', messageObj);
-
-    console.log(`Group message in ${roomName} from ${socket.user.username}: ${message}`);
-  } catch (error) {
-    console.error('Group message error:', error);
-    socket.emit('error', { message: 'Failed to send group message' });
-  }
-});
-
-// Handle joining specific group room (when user opens a group chat)
-socket.on('joinGroupRoom', async (data) => {
-  try {
-    const { groupId } = data;
-    
-    if (!groupId || !socket.userId) return;
-
-    // Verify membership
-    const { data: membership, error } = await supabase
-      .from('group_members')
-      .select('id')
-      .eq('group_id', groupId)
-      .eq('user_id', socket.userId)
-      .eq('status', 'active')
-      .single();
-
-    if (error || !membership) {
-      socket.emit('error', { message: 'Access denied to this group' });
-      return;
-    }
-
-    const roomName = `group_${groupId}`;
-    socket.join(roomName);
-    
-    // Notify others that user is active in this group
-    socket.to(roomName).emit('userJoinedGroupRoom', {
-      userId: socket.userId,
-      username: socket.user.username,
-      groupId
-    });
-
-    console.log(`${socket.user.username} joined group room: ${roomName}`);
-  } catch (error) {
-    console.error('Error joining group room:', error);
-  }
-});
-
-// Handle leaving group room (when user closes group chat)
-socket.on('leaveGroupRoom', (data) => {
-  try {
-    const { groupId } = data;
-    
-    if (!groupId) return;
-
-    const roomName = `group_${groupId}`;
-    socket.leave(roomName);
-    
-    // Notify others that user left the group room
-    socket.to(roomName).emit('userLeftGroupRoom', {
-      userId: socket.userId,
-      username: socket.user?.username,
-      groupId
-    });
-
-    console.log(`${socket.user?.username} left group room: ${roomName}`);
-  } catch (error) {
-    console.error('Error leaving group room:', error);
-  }
-});
-
-// Handle group typing indicators
-socket.on('typingInGroup', (data) => {
-  try {
-    const { groupId, isTyping } = data;
-    
-    if (!groupId || !socket.userId) return;
-
-    const roomName = `group_${groupId}`;
-    socket.to(roomName).emit('userTypingInGroup', {
-      userId: socket.userId,
-      username: socket.user?.username,
-      groupId,
-      isTyping
-    });
-  } catch (error) {
-    console.error('Error handling group typing:', error);
-  }
-});
+  });
 
 
   // Handle user disconnect
   socket.on('disconnect', () => {
     console.log(`User ${socket.user.username} disconnected`);
-    
+
     // Remove from active users
     activeUsers.delete(socket.id);
-    
+
     // Update user online status if no other connections
     const userStillConnected = Array.from(activeUsers.values())
       .some(user => user.userId === socket.userId);
-    
+
     if (!userStillConnected) {
       socket.user.isOnline = false;
-      
+
       // Notify other users that this user is offline
       socket.broadcast.emit('userOffline', {
         userId: socket.userId,

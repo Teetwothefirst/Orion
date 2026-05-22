@@ -46,7 +46,7 @@ module.exports = (io, socket) => {
     });
 
     socket.on('send_message', (data) => {
-        const { chatId, senderId, content, type, media_url, reply_to_id, forwarded_from_id } = data;
+        const { chatId, senderId, content, type, media_url, reply_to_id, forwarded_from_id, scheduledFor } = data;
 
         // Permission check for Channels
         db.get('SELECT type FROM chats WHERE id = ?', [chatId], (err, chat) => {
@@ -65,11 +65,12 @@ module.exports = (io, socket) => {
 
         function saveAndBroadcast() {
             const msgType = type || 'text';
-            const msgStatus = 'sent';
+            const msgStatus = scheduledFor ? 'scheduled' : 'sent';
+            const msgScheduledFor = scheduledFor || null;
 
             // Save to database
-            db.run(`INSERT INTO messages (chat_id, sender_id, content, type, media_url, status, reply_to_id, forwarded_from_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-                [chatId, senderId, content, msgType, media_url, msgStatus, reply_to_id, forwarded_from_id],
+            db.run(`INSERT INTO messages (chat_id, sender_id, content, type, media_url, status, reply_to_id, forwarded_from_id, scheduled_for) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                [chatId, senderId, content, msgType, media_url, msgStatus, reply_to_id, forwarded_from_id, msgScheduledFor],
                 function (err) {
                     if (err) {
                         console.error(err.message);

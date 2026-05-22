@@ -1,3 +1,4 @@
+// import '@/utils/polyfills'; // Moved to index.js
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';

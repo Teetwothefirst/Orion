@@ -7,8 +7,14 @@ import { Platform } from 'react-native';
 // const API_URL = Platform.OS === 'android' ? 'http://10.0.2.2:3000' : 'http://localhost:3000';
 
 // Use your computer's IP address for both emulator and physical device
-// const API_URL = 'http://10.251.129.168:3001';
-const API_URL = 'https://orion-mobile-desktop-backend.onrender.com';
+// Production Backend (Render) - Commented out due to suspended DB
+// const API_URL = 'https://orion-mobile-desktop-backend.onrender.com';
+
+// Local Backend
+// Web uses localhost, physical devices use your computer's IP address
+const API_URL = Platform.OS === 'web'
+    ? 'http://localhost:3001'
+    : 'http://localhost:3001'; // Fallback to localhost for now, or use workstation IP
 
 export const api = axios.create({
     baseURL: API_URL,

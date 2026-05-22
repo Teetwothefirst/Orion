@@ -1,9 +1,67 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Search, MoreHorizontal, MoreVertical, Send, Home, MessageCircle, Users, Heart, Bell, Plus, X, Paperclip, Check, CheckCheck, Reply, Forward, FileText, Play, Sticker, Smile } from 'lucide-react';
+import { Search, MoreHorizontal, MoreVertical, Send, Home, MessageCircle, Users, Heart, Bell, Plus, X, Paperclip, Check, CheckCheck, Reply, Forward, FileText, Play, Sticker, Smile, Download, Palette, Info, Clock } from 'lucide-react';
 import EmojiPicker from 'emoji-picker-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from './context/AuthContext.jsx';
 import { api, socket } from './services/api.js';
+
+// --- THEME DEFINITIONS ---
+const THEMES = {
+  light: {
+    id: 'light',
+    name: 'Light',
+    background: 'linear-gradient(135deg, #fce7f3 0%, #e0e7ff 100%)',
+    sidebarBg: 'rgba(255, 255, 255, 0.8)',
+    messageOwn: '#3b82f6',
+    messageOther: 'rgba(255, 255, 255, 0.8)',
+    text: '#1f2937'
+  },
+  dark: {
+    id: 'dark',
+    name: 'Dark',
+    background: 'linear-gradient(135deg, #111827 0%, #374151 100%)',
+    sidebarBg: 'rgba(31, 41, 55, 0.9)',
+    messageOwn: '#6366f1',
+    messageOther: 'rgba(55, 65, 81, 0.9)',
+    text: '#f3f4f6'
+  },
+  ocean: {
+    id: 'ocean',
+    name: 'Ocean',
+    background: 'linear-gradient(135deg, #ecfeff 0%, #06b6d4 100%)',
+    sidebarBg: 'rgba(255, 255, 255, 0.85)',
+    messageOwn: '#0891b2',
+    messageOther: 'rgba(255, 255, 255, 0.9)',
+    text: '#164e63'
+  },
+  sunset: {
+    id: 'sunset',
+    name: 'Sunset',
+    background: 'linear-gradient(135deg, #fff1f2 0%, #fda4af 50%, #e11d48 100%)',
+    sidebarBg: 'rgba(255, 255, 255, 0.9)',
+    messageOwn: '#be123c',
+    messageOther: 'rgba(255, 237, 213, 0.9)',
+    text: '#881337'
+  },
+  forest: {
+    id: 'forest',
+    name: 'Forest',
+    background: 'linear-gradient(135deg, #f0fdf4 0%, #15803d 100%)',
+    sidebarBg: 'rgba(255, 255, 255, 0.9)',
+    messageOwn: '#166534',
+    messageOther: 'rgba(220, 252, 231, 0.9)',
+    text: '#052e16'
+  },
+  midnight: {
+    id: 'midnight',
+    name: 'Midnight',
+    background: 'linear-gradient(135deg, #1e1b4b 0%, #4338ca 100%)',
+    sidebarBg: 'rgba(49, 46, 129, 0.9)',
+    messageOwn: '#4f46e5',
+    messageOther: 'rgba(67, 56, 202, 0.8)',
+    text: '#e0e7ff'
+  }
+};
 import BugReportModal from './components/BugReportModal.jsx';
 import { encryptionService } from './utils/EncryptionService';
 
@@ -47,6 +105,20 @@ const ChatInterface = () => {
   const fileInputRef = useRef(null);
   const profileImageRef = useRef(null);
 
+  // Theme & Profile View State
+  const [activeTheme, setActiveTheme] = useState(() => localStorage.getItem('chat_theme') || 'light');
+  const [showThemeModal, setShowThemeModal] = useState(false);
+  const [showUserProfileModal, setShowUserProfileModal] = useState(false);
+  const [profileViewUser, setProfileViewUser] = useState(null);
+  const [showSchedulePicker, setShowSchedulePicker] = useState(false); // Scheduled Messages
+
+  // Apply theme effect
+  useEffect(() => {
+    localStorage.setItem('chat_theme', activeTheme);
+  }, [activeTheme]);
+
+  const currentTheme = THEMES[activeTheme] || THEMES.light;
+
   useEffect(() => {
     if ("Notification" in window) {
       if (Notification.permission !== "granted" && Notification.permission !== "denied") {
@@ -79,6 +151,7 @@ const ChatInterface = () => {
       if (selectedContact && message.chat_id === selectedContact.id) {
         setMessages((prev) => [...prev, {
           id: message.id,
+          senderId: message.sender_id, // Store senderId for profile lookup
           sender: message.username,
           message: displayContent,
           type: message.type === 'encrypted' ? 'text' : message.type,
@@ -186,6 +259,14 @@ const ChatInterface = () => {
         ...prev,
         [data.userId]: { status: data.status, lastSeen: data.lastSeen }
       }));
+    });
+
+    socket.on('group_deleted', (data) => {
+      if (selectedContact && data.chatId === selectedContact.id) {
+        alert('This group has been deleted by an admin.');
+        setSelectedContact(null);
+      }
+      fetchContacts();
     });
 
     if (user) {
@@ -311,6 +392,17 @@ const ChatInterface = () => {
     }
   };
 
+  const handleDeleteGroup = async () => {
+    if (!window.confirm('Are you sure you want to permanently delete this group? This action cannot be undone.')) return;
+    try {
+      await api.delete(`/chats/${selectedContact.id}?adminId=${user.id}`);
+      setShowGroupInfo(false);
+      // Socket event will handle redirect and list refresh
+    } catch (error) {
+      alert(error.response?.data || 'Error deleting group');
+    }
+  };
+
   const handleJoinGroup = async () => {
     if (!inviteCode) return;
     try {
@@ -329,6 +421,7 @@ const ChatInterface = () => {
       const response = await api.get(`/chats?userId=${user.id}`);
       const formattedContacts = response.data.map(chat => ({
         id: chat.id,
+        otherUserId: chat.other_user_id, // Store User ID for private chats
         name: chat.name || chat.group_name, // Backend might return group_name separately
         type: chat.type || 'private',
         lastMessage: chat.last_message || 'No messages yet',
@@ -541,6 +634,35 @@ const ChatInterface = () => {
     }
   };
 
+  const handleDownload = async (url, filename) => {
+    try {
+      console.log('Attempting download:', url);
+      const response = await fetch(url);
+      if (!response.ok) throw new Error('Network response was not ok');
+      const blob = await response.blob();
+      const blobUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.download = filename || 'download';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(blobUrl);
+    } catch (error) {
+      console.error('Download failed:', error);
+      // Fallback: Create a direct download link and click it
+      // This is better than window.open as it respects the download attribute if possible
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename || 'download';
+      link.target = '_blank'; // Fail-safe to new tab if download is blocked
+      link.rel = 'noopener noreferrer';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+  };
+
   const scrollToBottom = () => {
     setTimeout(() => {
       messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -561,11 +683,21 @@ const ChatInterface = () => {
     }
   };
 
-  const handleStartChat = async (otherUser) => {
+  const handleStartChat = async (target) => {
     try {
+      // Determine target User ID:
+      // If target is a contact (existing chat), use otherUserId.
+      // If target is a user (search result), use id.
+      const targetUserId = target.otherUserId || target.id;
+
+      if (!targetUserId) {
+        console.error('Invalid target for start chat');
+        return;
+      }
+
       const response = await api.post('/chats', {
         userId: user.id,
-        otherUserId: otherUser.id
+        otherUserId: targetUserId
       });
 
       setShowNewChatModal(false);
@@ -614,19 +746,27 @@ const ChatInterface = () => {
             </div>
             <span style={styles.logoipsum}>Orion Chat</span>
           </div>
-          <div
-            style={{ ...styles.userSection, cursor: 'pointer' }}
-            onClick={() => setShowProfileModal(true)}
-            title="Profile Settings"
-          >
-            <div style={styles.userAvatar}>
-              {user?.avatar ? (
-                <img src={user.avatar} alt="Avatar" style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} />
-              ) : (
-                <span>👤</span>
-              )}
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+            <Palette
+              size={20}
+              style={{ cursor: 'pointer', color: '#6b7280' }}
+              onClick={() => setShowThemeModal(true)}
+              title="Change Theme"
+            />
+            <div
+              style={{ ...styles.userSection, cursor: 'pointer' }}
+              onClick={() => setShowProfileModal(true)}
+              title="Profile Settings"
+            >
+              <div style={styles.userAvatar}>
+                {user?.avatar ? (
+                  <img src={user.avatar} alt="Avatar" style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} />
+                ) : (
+                  <span>👤</span>
+                )}
+              </div>
+              <span style={styles.userName}>{user?.username || 'User'}</span>
             </div>
-            <span style={styles.userName}>{user?.username || 'User'}</span>
           </div>
         </div>
 
@@ -851,9 +991,12 @@ const ChatInterface = () => {
                   )}
                 </div>
                 <div
-                  style={{ cursor: selectedContact.type !== 'private' ? 'pointer' : 'default' }}
+                  style={{ cursor: 'pointer' }}
                   onClick={() => {
-                    if (selectedContact.type !== 'private') {
+                    if (selectedContact.type === 'private') {
+                      setProfileViewUser(selectedContact);
+                      setShowUserProfileModal(true);
+                    } else {
                       fetchParticipants(selectedContact.id);
                       setShowGroupInfo(true);
                     }
@@ -882,7 +1025,7 @@ const ChatInterface = () => {
             </div>
 
             {/* Messages */}
-            <div style={styles.messagesContainer}>
+            <div style={{ ...styles.messagesContainer, background: currentTheme.background }}>
               {messages.map((message, index) => (
                 <div
                   key={index}
@@ -892,7 +1035,16 @@ const ChatInterface = () => {
                   }}
                 >
                   {!message.isOwn && (
-                    <div style={styles.messageAvatar}>
+                    <div
+                      style={styles.messageAvatar}
+                      onClick={() => {
+                        const contact = contacts.find(c => c.name === message.sender);
+                        if (contact) {
+                          setProfileViewUser(contact);
+                          setShowUserProfileModal(true);
+                        }
+                      }}
+                    >
                       👤
                     </div>
                   )}
@@ -900,7 +1052,10 @@ const ChatInterface = () => {
                     className="message-bubble-container"
                     style={{
                       ...styles.messageBubble,
-                      ...(message.isOwn ? styles.messageBubbleOwn : styles.messageBubbleOther)
+                      ...(message.isOwn
+                        ? { ...styles.messageBubbleOwn, backgroundColor: currentTheme.messageOwn }
+                        : { ...styles.messageBubbleOther, backgroundColor: currentTheme.messageOther, color: currentTheme.text }
+                      )
                     }}
                     onMouseEnter={(e) => {
                       const actions = e.currentTarget.querySelector('.message-actions');
@@ -921,18 +1076,90 @@ const ChatInterface = () => {
                     )}
 
                     {message.type === 'image' && (
-                      <img src={message.media_url} alt="Shared" style={styles.mediaImage} />
+                      <div className="media-container" style={{ position: 'relative', display: 'inline-block' }}>
+                        <img src={message.media_url} alt="Shared" style={styles.mediaImage} />
+                        <button
+                          className="download-btn"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDownload(message.media_url, `image-${message.id}.jpg`);
+                          }}
+                          style={{
+                            position: 'absolute',
+                            bottom: '8px',
+                            right: '8px',
+                            background: 'rgba(0,0,0,0.6)',
+                            border: 'none',
+                            borderRadius: '50%',
+                            padding: '6px',
+                            cursor: 'pointer',
+                            color: 'white',
+                            zIndex: 10,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center'
+                          }}
+                          title="Download"
+                        >
+                          <Download size={16} />
+                        </button>
+                      </div>
                     )}
 
                     {message.type === 'video' && (
-                      <video src={message.media_url} controls style={styles.mediaVideo} />
+                      <div className="media-container" style={{ position: 'relative', display: 'inline-block' }}>
+                        <video src={message.media_url} controls style={styles.mediaVideo} />
+                        <button
+                          className="download-btn"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDownload(message.media_url, `video-${message.id}.mp4`);
+                          }}
+                          style={{
+                            position: 'absolute',
+                            top: '8px',
+                            right: '8px',
+                            background: 'rgba(0,0,0,0.6)',
+                            border: 'none',
+                            borderRadius: '50%',
+                            padding: '6px',
+                            cursor: 'pointer',
+                            color: 'white',
+                            zIndex: 10,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center'
+                          }}
+                          title="Download"
+                        >
+                          <Download size={16} />
+                        </button>
+                      </div>
                     )}
 
                     {message.type === 'document' && (
-                      <a href={message.media_url} target="_blank" rel="noopener noreferrer" style={styles.mediaDoc}>
-                        <FileText size={24} />
-                        <span>{message.message || 'Document'}</span>
-                      </a>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <a href={message.media_url} target="_blank" rel="noopener noreferrer" style={styles.mediaDoc}>
+                          <FileText size={24} />
+                          <span>{message.message || 'Document'}</span>
+                        </a>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDownload(message.media_url, message.message || `document-${message.id}`);
+                          }}
+                          style={{
+                            background: 'transparent',
+                            border: 'none',
+                            cursor: 'pointer',
+                            color: message.isOwn ? 'rgba(255,255,255,0.8)' : '#6b7280',
+                            padding: '4px'
+                          }}
+                          title="Download"
+                        >
+                          <Download size={18} />
+                        </button>
+                      </div>
                     )}
 
                     {message.type === 'gif' && (
@@ -1359,7 +1586,7 @@ const ChatInterface = () => {
                 <h2 style={styles.modalTitle}>Edit Profile</h2>
                 <X size={24} style={{ cursor: 'pointer', color: '#6b7280' }} onClick={() => setShowProfileModal(false)} />
               </div>
-              <form onSubmit={handleUpdateProfile} style={{ padding: '16px', overflow: 'auto' }}>
+              <form onSubmit={handleUpdateProfile} style={{ padding: '20px', overflowY: 'auto', margin: '5px', overflowX: 'hidden' }}>
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: '20px' }}>
                   <div
                     style={{ ...styles.userAvatar, width: '80px', height: '80px', fontSize: '32px', cursor: 'pointer', marginBottom: '10px' }}
@@ -1525,7 +1752,7 @@ const ChatInterface = () => {
                 )}
               </div>
 
-              <div style={{ padding: '16px' }}>
+              <div style={{ padding: '16px', overflow: 'auto'}}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
                   <h4 style={{ fontSize: '14px', color: '#6b7280', margin: 0, textTransform: 'uppercase' }}>
                     Participants ({participants.length})
@@ -1576,6 +1803,30 @@ const ChatInterface = () => {
                     </div>
                   ))}
                 </div>
+
+                {(myRole === 'owner' || myRole === 'admin') && (
+                  <button
+                    style={{
+                      width: '100%',
+                      marginTop: '24px',
+                      padding: '12px',
+                      backgroundColor: '#fee2e2',
+                      color: '#ef4444',
+                      border: 'none',
+                      borderRadius: '8px',
+                      cursor: 'pointer',
+                      fontWeight: 'bold',
+                      fontSize: '14px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '8px'
+                    }}
+                    onClick={handleDeleteGroup}
+                  >
+                    Delete Group
+                  </button>
+                )}
               </div>
             </div>
           </div>
@@ -1672,6 +1923,170 @@ const ChatInterface = () => {
           </div>
         )
       }
+      {/* Theme Selector Modal */}
+      {showThemeModal && (
+        <div style={styles.modalOverlay} onClick={() => setShowThemeModal(false)}>
+          <div style={{ ...styles.modalContent, width: '600px' }} onClick={(e) => e.stopPropagation()}>
+            <div style={styles.modalHeader}>
+              <h2 style={styles.modalTitle}>Choose Theme</h2>
+              <X size={24} style={{ cursor: 'pointer', color: '#6b7280' }} onClick={() => setShowThemeModal(false)} />
+            </div>
+            <div style={{ padding: '24px', display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '16px', overflowY: 'auto' }}>
+              {Object.values(THEMES).map((theme) => (
+                <div
+                  key={theme.id}
+                  style={{
+                    padding: '16px',
+                    borderRadius: '16px',
+                    background: theme.background,
+                    cursor: 'pointer',
+                    border: activeTheme === theme.id ? '2px solid #3b82f6' : '2px solid transparent',
+                    position: 'relative',
+                    height: '100px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+                  }}
+                  onClick={() => setActiveTheme(theme.id)}
+                >
+                  <span style={{
+                    color: theme.text,
+                    fontWeight: '600',
+                    fontSize: '18px',
+                    textShadow: '0 1px 2px rgba(255,255,255,0.5)'
+                  }}>
+                    {theme.name}
+                  </span>
+                  {activeTheme === theme.id && (
+                    <div style={{ position: 'absolute', top: '8px', right: '8px', background: 'white', borderRadius: '50%', padding: '2px' }}>
+                      <CheckCheck size={16} color="#3b82f6" />
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* User Profile View Modal */}
+      {showUserProfileModal && profileViewUser && (
+        <div style={styles.modalOverlay} onClick={() => setShowUserProfileModal(false)}>
+          <div style={{ ...styles.modalContent, width: '400px' }} onClick={(e) => e.stopPropagation()}>
+            <div style={{ position: 'relative' }}>
+              <div
+                style={{
+                  height: '120px',
+                  backgroundImage: currentTheme.background,
+                  borderRadius: '24px 24px 0 0'
+                }}
+              />
+              <button
+                style={{
+                  position: 'absolute',
+                  top: '16px',
+                  right: '16px',
+                  background: 'rgba(255,255,255,0.5)',
+                  border: 'none',
+                  borderRadius: '50%',
+                  padding: '8px',
+                  cursor: 'pointer'
+                }}
+                onClick={() => setShowUserProfileModal(false)}
+              >
+                <X size={20} color="#1f2937" />
+              </button>
+              <div style={{
+                position: 'absolute',
+                bottom: '-50px',
+                left: '50%',
+                transform: 'translateX(-50%)',
+                padding: '4px',
+                background: 'white',
+                borderRadius: '50%'
+              }}>
+                <div style={{ ...styles.profileAvatar, width: '100px', height: '100px', margin: 0, fontSize: '40px' }}>
+                  {profileViewUser.avatar && profileViewUser.avatar.startsWith('http') ? (
+                    <img src={profileViewUser.avatar} alt={profileViewUser.name} style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} />
+                  ) : (
+                    profileViewUser.avatar || '👤'
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div style={{ marginTop: '60px', padding: '24px', textAlign: 'center' }}>
+              <h2 style={{ fontSize: '24px', fontWeight: 'bold', color: '#1f2937', marginBottom: '4px' }}>
+                {profileViewUser.name || profileViewUser.username}
+              </h2>
+              {profileViewUser.username && (
+                <p style={{ color: '#6b7280', fontSize: '14px', marginBottom: '16px' }}>@{profileViewUser.username}</p>
+              )}
+
+              <div style={{ display: 'flex', justifyContent: 'center', gap: '24px', marginBottom: '24px' }}>
+                <div style={{ textAlign: 'center' }}>
+                  <p style={{ fontSize: '12px', color: '#6b7280', textTransform: 'uppercase', marginBottom: '4px' }}>Status</p>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', justifyContent: 'center' }}>
+                    {onlineUsers[profileViewUser.id]?.status === 'online' ? (
+                      <>
+                        <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#10b981' }} />
+                        <span style={{ color: '#10b981', fontWeight: '500' }}>Online</span>
+                      </>
+                    ) : (
+                      <span style={{ color: '#6b7280' }}>Offline</span>
+                    )}
+                  </div>
+                </div>
+                <div style={{ textAlign: 'center' }}>
+                  <p style={{ fontSize: '12px', color: '#6b7280', textTransform: 'uppercase', marginBottom: '4px' }}>Last Seen</p>
+                  <p style={{ color: '#1f2937', fontWeight: '500', margin: 0 }}>
+                    {onlineUsers[profileViewUser.id]?.lastSeen || profileViewUser.lastSeen
+                      ? new Date(onlineUsers[profileViewUser.id]?.lastSeen || profileViewUser.lastSeen).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                      : 'Recently'
+                    }
+                  </p>
+                </div>
+              </div>
+
+              {profileViewUser.bio && (
+                <div style={{ background: '#f9fafb', padding: '16px', borderRadius: '12px', textAlign: 'left', marginBottom: '24px' }}>
+                  <p style={{ fontSize: '12px', color: '#6b7280', textTransform: 'uppercase', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <Info size={14} /> Bio
+                  </p>
+                  <p style={{ color: '#374151', fontSize: '14px', lineHeight: '1.5', margin: 0 }}>
+                    {profileViewUser.bio}
+                  </p>
+                </div>
+              )}
+
+              <button
+                style={{
+                  width: '100%',
+                  padding: '12px',
+                  background: '#3b82f6',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '12px',
+                  fontWeight: '600',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '8px'
+                }}
+                onClick={() => {
+                  handleStartChat(profileViewUser);
+                  setShowUserProfileModal(false);
+                }}
+              >
+                <MessageCircle size={18} /> Send Message
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div >
   );
 };
@@ -1695,7 +2110,7 @@ const styles = {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: '16px',
+    padding: '22px',
     borderBottom: '1px solid #e5e7eb'
   },
   logout: {

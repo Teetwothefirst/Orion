@@ -33,7 +33,10 @@ router.post('/login', (req, res) => {
     const { email, password } = req.body;
 
     db.get(`SELECT * FROM users WHERE email = ?`, [email], (err, user) => {
-        if (err) return res.status(500).send('Error on the server.');
+        if (err) {
+            console.error('Login DB Error:', err);
+            return res.status(500).send('Error on the server: ' + err.message);
+        }
         if (!user) return res.status(404).send('No user found.');
 
         const passwordIsValid = bcrypt.compareSync(password, user.password);
@@ -68,7 +71,10 @@ const { sendResetEmail, sendPasswordChangedEmail } = require('../utils/mailer');
 router.post('/forgot-password', (req, res) => {
     const { email } = req.body;
     db.get('SELECT * FROM users WHERE email = ?', [email], (err, user) => {
-        if (err) return res.status(500).send('Error on the server.');
+        if (err) {
+            console.error('Forgot Password DB Error:', err);
+            return res.status(500).send('Error on the server: ' + err.message);
+        }
         if (!user) return res.status(404).send('User not found.');
 
         // Generate token
@@ -95,7 +101,10 @@ router.post('/reset-password', (req, res) => {
     const { token, newPassword } = req.body;
 
     db.get('SELECT * FROM users WHERE reset_token = ? AND reset_token_expiry > ?', [token, Date.now()], (err, user) => {
-        if (err) return res.status(500).send('Error on the server.');
+        if (err) {
+            console.error('Reset Password DB Error:', err);
+            return res.status(500).send('Error on the server: ' + err.message);
+        }
         if (!user) return res.status(400).send('Password reset token is invalid or has expired.');
 
         const hashedPassword = bcrypt.hashSync(newPassword, 8);

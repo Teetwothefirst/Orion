@@ -21,6 +21,10 @@ export const AuthProvider = ({ children }) => {
             return true;
         } catch (error) {
             console.error('Login error:', error);
+            if (!error.response) {
+                setError('Network error. Cannot connect to server.');
+                return false;
+            }
             const errorData = error.response?.data;
             const message = typeof errorData === 'string'
                 ? errorData
@@ -44,6 +48,10 @@ export const AuthProvider = ({ children }) => {
             return true;
         } catch (error) {
             console.error('Register error:', error);
+            if (!error.response) {
+                setError('Network error. Cannot connect to server.');
+                return false;
+            }
             const errorData = error.response?.data;
             const message = typeof errorData === 'string'
                 ? errorData
@@ -62,6 +70,10 @@ export const AuthProvider = ({ children }) => {
             const response = await api.post('/auth/forgot-password', { email });
             return response.data;
         } catch (error) {
+            if (!error.response) {
+                setError('Network error. Cannot connect to server.');
+                return null;
+            }
             const errorData = error.response?.data;
             const message = typeof errorData === 'string'
                 ? errorData
@@ -80,6 +92,10 @@ export const AuthProvider = ({ children }) => {
             const response = await api.post('/auth/reset-password', { token, newPassword });
             return response.data;
         } catch (error) {
+            if (!error.response) {
+                setError('Network error. Cannot connect to server.');
+                return null;
+            }
             const errorData = error.response?.data;
             const message = typeof errorData === 'string'
                 ? errorData

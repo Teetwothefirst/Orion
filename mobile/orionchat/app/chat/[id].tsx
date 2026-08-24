@@ -10,7 +10,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { Video, ResizeMode } from 'expo-av';
 import { Alert } from 'react-native';
 import MediaPicker from '@/components/chat/MediaPicker';
-import { encryptionService } from '@/services/EncryptionService';
+import { encryptionServiceV2 as encryptionService } from '@/services/EncryptionServiceV2';
 import { localDb } from '@/services/LocalDatabaseService';
 
 interface Message {
@@ -70,20 +70,31 @@ export default function ChatRoomScreen() {
 
         // Listen for new messages
         socket.on('receive_message', async (message: Message) => {
-            let displayContent = message.content;
-            if (message.type === 'encrypted') {
-                try {
-                    const encryptedData = JSON.parse(message.content);
-                    displayContent = await encryptionService.decryptMessage(message.sender_id, encryptedData);
-                } catch (err) {
-                    console.error('Mobile Decryption failed:', err);
-                    displayContent = '[Decryption Failed]';
-                }
+            if (!message || !message.id) {
+                console.warn('Invalid message received:', message);
+                return;
             }
 
-            if (message.sender_id !== user.id) {
-                socket.emit('message_read', { chatId: id, userId: user.id });
-            }
+            try {
+                let displayContent = message.content;
+                if (message.type === 'encrypted') {
+                    try {
+                        const encryptedData = JSON.parse(message.content);
+                        try {
+                            displayContent = await encryptionService.decryptMessage(message.sender_id, encryptedData);
+                        } catch (decryptErr) {
+                            console.error('Mobile Decryption failed:', decryptErr);
+                            displayContent = '[Encrypted - Decryption Error]';
+                        }
+                    } catch (parseErr) {
+                        console.error('Failed to parse encrypted message:', parseErr);
+                        displayContent = '[Invalid Encrypted Message]';
+                    }
+                }
+
+                if (message.sender_id !== user?.id) {
+                    socket.emit('message_read', { chatId: id, userId: user?.id });
+                }
 
             setMessages((prev) => [...prev, {
                 ...message,
@@ -295,24 +306,40 @@ export default function ChatRoomScreen() {
     const fetchMessages = async () => {
         try {
             const response = await api.get(`/chats/${id}/messages`);
-            const decryptedMessages = await Promise.all(response.data.map(async (m: any) => {
-                if (m.type === 'encrypted') {
-                    try {
-                        const encryptedData = JSON.parse(m.content);
-                        const senderId = m.sender_id;
-                        // For historical messages, the "other" user is the one we establishment session with
-                        const targetUserId = senderId === user?.id ? chatInfo?.other_user_id : senderId;
+            if (!response.data || !Array.isArray(response.data)) {
+                setMessages([]);
+                setLoading(false);
+                return;
+            }
 
-                        if (targetUserId) {
-                            const decrypted = await encryptionService.decryptMessage(targetUserId, encryptedData);
-                            return { ...m, content: decrypted, type: 'text' as const };
+            const decryptedMessages = await Promise.all(response.data.map(async (m: any) => {
+                try {
+                    if (m?.type === 'encrypted') {
+                        try {
+                            const encryptedData = JSON.parse(m.content);
+                            const senderId = m.sender_id;
+                            // For historical messages, the "other" user is the one we establishment session with
+                            const targetUserId = senderId === user?.id ? chatInfo?.other_user_id : senderId;
+
+                            if (targetUserId && encryptionService) {
+                                try {
+                                    const decrypted = await encryptionService.decryptMessage(targetUserId, encryptedData);
+                                    return { ...m, content: decrypted, type: 'text' as const };
+                                } catch (decryptErr) {
+                                    console.error('Mobile Decryption failed for message', m.id, ':', decryptErr);
+                                    return { ...m, content: '[Encrypted - Decryption Error]', type: 'text' as const };
+                                }
+                            }
+                        } catch (parseErr) {
+                            console.error('Mobile Decryption failed for historical message:', parseErr);
+                            return { ...m, content: '[Invalid Encrypted Message]' };
                         }
-                    } catch (err) {
-                        console.error('Mobile Decryption failed for historical message:', err);
-                        return { ...m, content: '[Encrypted]' };
                     }
+                    return m;
+                } catch (mapErr) {
+                    console.error('Error processing message:', mapErr);
+                    return m;
                 }
-                return m;
             }));
 
             setMessages(decryptedMessages);
@@ -323,6 +350,7 @@ export default function ChatRoomScreen() {
             localDb.saveMessages(parseInt(id as string), decryptedMessages);
         } catch (error) {
             console.error('Error fetching messages:', error);
+            setMessages([]);
             setLoading(false);
         }
     };
@@ -336,11 +364,18 @@ export default function ChatRoomScreen() {
         // E2EE for private chats
         if (chatInfo?.type === 'private' && type === 'text' && !overrideData.media_url) {
             try {
-                const encrypted = await encryptionService.encryptMessage(chatInfo.other_user_id, content);
-                content = JSON.stringify(encrypted);
-                type = 'encrypted';
+                if (!chatInfo.other_user_id) {
+                    console.warn('No other_user_id available for encryption');
+                    // Send unencrypted if we can't determine recipient
+                } else {
+                    const encrypted = await encryptionService.encryptMessage(chatInfo.other_user_id, content);
+                    content = JSON.stringify(encrypted);
+                    type = 'encrypted';
+                }
             } catch (err) {
                 console.error('Mobile Encryption failed:', err);
+                // Fallback to unencrypted message
+                Alert.alert('Warning', 'Message will be sent unencrypted due to encryption error');
             }
         }
 
@@ -541,54 +576,66 @@ export default function ChatRoomScreen() {
     };
 
     const renderMessage = ({ item }: { item: Message }) => {
-        const isMyMessage = item.sender_id === user?.id;
-        let swipeableRow: Swipeable | null = null;
-
-        const close = () => {
-            swipeableRow?.close();
-        };
-
-        const onSwipeableOpen = (direction: 'left' | 'right') => {
-            if (direction === 'left') {
-                setReplyTo(item);
-                close();
+        try {
+            if (!item || !item.id) {
+                return null;
             }
-        };
 
-        return (
-            <Swipeable
-                ref={ref => { swipeableRow = ref; }}
-                friction={2}
-                leftThreshold={30}
-                // renderLeftActions implies swiping from left to right (Telegram style)
-                renderLeftActions={(progress, dragX) => renderReplyAction(progress, dragX, item)}
-                onSwipeableOpen={onSwipeableOpen}
-            >
-                <View style={[styles.messageContainer, isMyMessage ? styles.myMessageContainer : styles.otherMessageContainer]}>
-                    {!isMyMessage && (
-                        <Image source={{ uri: item.avatar || 'https://i.pravatar.cc/100' }} style={styles.avatar} />
-                    )}
-                    <TouchableOpacity
-                        activeOpacity={0.8}
-                        onLongPress={() => handleMessagePress(item)}
-                        style={[styles.messageBubble, isMyMessage ? styles.myMessageBubble : styles.otherMessageBubble]}
-                    >
-                        {!isMyMessage && <Text style={styles.senderName}>{item.username}</Text>}
+            const isMyMessage = item.sender_id === user?.id;
+            let swipeableRow: Swipeable | null = null;
 
-                        {item.reply_to_id && (
-                            <View style={styles.replyContext}>
-                                <Text style={styles.replySender}>{item.reply_sender_id === user?.id ? 'You' : 'Reply'}</Text>
-                                <Text style={styles.replySnippet} numberOfLines={1}>{item.reply_content}</Text>
-                            </View>
+            const close = () => {
+                swipeableRow?.close();
+            };
+
+            const onSwipeableOpen = (direction: 'left' | 'right') => {
+                if (direction === 'left') {
+                    setReplyTo(item);
+                    close();
+                }
+            };
+
+            return (
+                <Swipeable
+                    ref={ref => { swipeableRow = ref; }}
+                    friction={2}
+                    leftThreshold={30}
+                    // renderLeftActions implies swiping from left to right (Telegram style)
+                    renderLeftActions={(progress, dragX) => renderReplyAction(progress, dragX, item)}
+                    onSwipeableOpen={onSwipeableOpen}
+                >
+                    <View style={[styles.messageContainer, isMyMessage ? styles.myMessageContainer : styles.otherMessageContainer]}>
+                        {!isMyMessage && (
+                            <Image source={{ uri: item.avatar || 'https://i.pravatar.cc/100' }} style={styles.avatar} />
                         )}
+                        <TouchableOpacity
+                            activeOpacity={0.8}
+                            onLongPress={() => handleMessagePress(item)}
+                            style={[styles.messageBubble, isMyMessage ? styles.myMessageBubble : styles.otherMessageBubble]}
+                        >
+                            {!isMyMessage && <Text style={styles.senderName}>{item.username}</Text>}
 
-                        {item.type === 'image' && (
+                            {item.reply_to_id && (
+                                <View style={styles.replyContext}>
+                                    <Text style={styles.replySender}>{item.reply_sender_id === user?.id ? 'You' : 'Reply'}</Text>
+                                    <Text style={styles.replySnippet} numberOfLines={1}>{item.reply_content}</Text>
+                                </View>
+                            )}
+
+                        {item.type === 'image' && item.media_url && (
                             <Image source={{ uri: item.media_url }} style={styles.mediaImage} resizeMode="cover" />
                         )}
 
-                        {item.type === 'video' && (
+                        {item.type === 'image' && !item.media_url && (
+                            <View style={styles.mediaPlaceholder}>
+                                <Ionicons name="image" size={40} color="white" />
+                                <Text style={{ color: 'white', marginTop: 4 }}>Image unavailable</Text>
+                            </View>
+                        )}
+
+                        {item.type === 'video' && item.media_url && (
                             <Video
-                                source={{ uri: item.media_url || '' }}
+                                source={{ uri: item.media_url }}
                                 rate={1.0}
                                 volume={1.0}
                                 isMuted={false}
@@ -600,6 +647,13 @@ export default function ChatRoomScreen() {
                             />
                         )}
 
+                        {item.type === 'video' && !item.media_url && (
+                            <View style={styles.mediaPlaceholder}>
+                                <Ionicons name="play-circle" size={40} color="white" />
+                                <Text style={{ color: 'white', marginTop: 4 }}>Video unavailable</Text>
+                            </View>
+                        )}
+
                         {item.type === 'document' && (
                             <View style={styles.mediaPlaceholder}>
                                 <Ionicons name="document" size={40} color="white" />
@@ -607,7 +661,7 @@ export default function ChatRoomScreen() {
                             </View>
                         )}
 
-                        {item.type === 'gif' && (
+                        {item.type === 'gif' && item.media_url && (
                             <Image
                                 source={{ uri: item.media_url }}
                                 style={styles.gifMessage}
@@ -615,12 +669,26 @@ export default function ChatRoomScreen() {
                             />
                         )}
 
-                        {item.type === 'sticker' && (
+                        {item.type === 'gif' && !item.media_url && (
+                            <View style={styles.mediaPlaceholder}>
+                                <Ionicons name="image" size={40} color="white" />
+                                <Text style={{ color: 'white', marginTop: 4 }}>GIF unavailable</Text>
+                            </View>
+                        )}
+
+                        {item.type === 'sticker' && item.media_url && (
                             <Image
                                 source={{ uri: item.media_url }}
                                 style={styles.stickerMessage}
                                 resizeMode="contain"
                             />
+                        )}
+
+                        {item.type === 'sticker' && !item.media_url && (
+                            <View style={styles.mediaPlaceholder}>
+                                <Ionicons name="happy" size={40} color="white" />
+                                <Text style={{ color: 'white', marginTop: 4 }}>Sticker unavailable</Text>
+                            </View>
                         )}
 
                         {item.type === 'text' && (
@@ -631,7 +699,7 @@ export default function ChatRoomScreen() {
 
                         <View style={styles.messageFooter}>
                             <Text style={styles.timestamp}>
-                                {new Date(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                {item.created_at ? new Date(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
                             </Text>
                             {isMyMessage && (
                                 <Ionicons
@@ -665,35 +733,48 @@ export default function ChatRoomScreen() {
                     </TouchableOpacity>
                 </View>
             </Swipeable>
-        );
+            );
+        } catch (err) {
+            console.error('Error rendering message:', err);
+            return null;
+        }
     };
 
     const renderHeaderTitle = () => {
-        const otherUserId = chatInfo?.other_user_id || messages.find(m => m.sender_id !== user?.id)?.sender_id;
-        const status = otherUserId ? onlineUsers[otherUserId] : null;
+        try {
+            const otherUserId = chatInfo?.other_user_id || messages.find(m => m?.sender_id !== user?.id)?.sender_id;
+            const status = otherUserId ? onlineUsers[otherUserId] : null;
 
-        return (
-            <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingRight: 15 }}>
-                <View style={{ flex: 1, alignItems: 'center' }}>
-                    <Text style={styles.headerTitle}>{chatInfo?.name || 'Chat'}</Text>
-                    {status && (
-                        <Text style={[styles.statusText, status.status === 'online' && { color: '#4CD964' }]}>
-                            {status.status === 'online' ? 'Online' :
-                                status.lastSeen ? `Last seen ${new Date(status.lastSeen).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` :
-                                    'Offline'}
-                        </Text>
+            return (
+                <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingRight: 15 }}>
+                    <View style={{ flex: 1, alignItems: 'center' }}>
+                        <Text style={styles.headerTitle}>{chatInfo?.name || 'Chat'}</Text>
+                        {status && (
+                            <Text style={[styles.statusText, status.status === 'online' && { color: '#4CD964' }]}>
+                                {status.status === 'online' ? 'Online' :
+                                    status.lastSeen ? `Last seen ${new Date(status.lastSeen).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` :
+                                        'Offline'}
+                            </Text>
+                        )}
+                    </View>
+                    {chatInfo?.type !== 'private' && (
+                        <TouchableOpacity onPress={() => {
+                            fetchParticipants();
+                            setShowGroupInfo(true);
+                        }}>
+                            <Ionicons name="information-circle-outline" size={24} color="#007AFF" />
+                        </TouchableOpacity>
                     )}
                 </View>
-                {chatInfo?.type !== 'private' && (
-                    <TouchableOpacity onPress={() => {
-                        fetchParticipants();
-                        setShowGroupInfo(true);
-                    }}>
-                        <Ionicons name="information-circle-outline" size={24} color="#007AFF" />
-                    </TouchableOpacity>
-                )}
-            </View>
-        );
+            );
+        } catch (err) {
+            console.error('Error rendering header title:', err);
+            return (
+                <View style={{ flex: 1, alignItems: 'center' }}>
+                    <Text style={styles.headerTitle}>{chatInfo?.name || 'Chat'}</Text>
+                </View>
+            );
+        }
     };
 
     return (

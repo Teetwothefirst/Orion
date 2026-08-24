@@ -114,7 +114,7 @@ export default function RootLayout() {
               <Stack.Screen name="general" options={{ presentation: 'card', title: 'General Settings' }} />
               <Stack.Screen name="account" options={{ presentation: 'card', title: 'Account Settings' }} />
               <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
-              <Stack.Screen name="chat/[id]" options={{ headerShown: false }} />
+              <Stack.Screen name="chat" options={{ headerShown: false }} />
             </Stack>
             <StatusBar style="auto" />
           </ThemeProvider>

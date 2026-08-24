@@ -438,6 +438,12 @@ export default function ChatRoomScreen() {
     };
 
     const handleReaction = async (messageId: number, emoji: string) => {
+        const targetMsg = messages.find(m => m.id === messageId);
+        if (targetMsg && targetMsg.sender_id === user?.id) {
+            setShowReactionPicker(false);
+            setSelectedMessageForReaction(null);
+            return;
+        }
         try {
             await api.post(`/chats/messages/${messageId}/react`, {
                 userId: user?.id,
@@ -464,7 +470,6 @@ export default function ChatRoomScreen() {
                             await api.delete(`/chats/messages/${messageId}`, {
                                 data: { userId: user?.id }
                             });
-                            // Message will be removed via socket event
                         } catch (error) {
                             console.error('Error deleting message:', error);
                             Alert.alert('Error', 'Failed to delete message. You can only delete your own messages.');
@@ -476,16 +481,20 @@ export default function ChatRoomScreen() {
     };
 
     const handleMessagePress = (item: Message) => {
-        const actions: any[] = [
-            {
+        const actions: any[] = [];
+
+        // Only add React option for other users' messages
+        if (item.sender_id !== user?.id) {
+            actions.push({
                 text: 'React', onPress: () => {
                     setSelectedMessageForReaction(item);
                     setShowReactionPicker(true);
                 }
-            },
-            { text: 'Reply', onPress: () => setReplyTo(item) },
-            { text: 'Forward', onPress: () => handleForward(item) }
-        ];
+            });
+        }
+
+        actions.push({ text: 'Reply', onPress: () => setReplyTo(item) });
+        actions.push({ text: 'Forward', onPress: () => handleForward(item) });
 
         // Add Delete option only for own messages
         if (item.sender_id === user?.id) {
@@ -641,7 +650,7 @@ export default function ChatRoomScreen() {
                                                 styles.reactionChip,
                                                 r.user_ids.includes(user?.id || -1) && styles.reactionChipActive
                                             ]}
-                                            onPress={() => handleReaction(item.id, r.emoji)}
+                                            onPress={() => !isMyMessage && handleReaction(item.id, r.emoji)}
                                         >
                                             <Text style={styles.reactionEmoji}>{r.emoji}</Text>
                                             <Text style={[styles.reactionCount, r.user_ids.includes(user?.id || -1) && { color: '#007AFF' }]}>

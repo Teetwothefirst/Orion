@@ -22,6 +22,7 @@ const io = new Server(server, {
 
 app.use(cors());
 app.use(express.json());
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Middleware to attach io to req
 app.use((req, res, next) => {

@@ -11,28 +11,65 @@ const router = express.Router();
 
 const generateInviteCode = () => crypto.randomBytes(6).toString('hex');
 
-// Multer & Cloudinary Storage Configuration
-const storage = new CloudinaryStorage({
-    cloudinary: cloudinary,
-    params: {
-        folder: 'orion_chat_media',
-        resource_type: 'auto', // Support image, video, raw (docs)
-        allowed_formats: ['jpg', 'jpeg', 'png', 'gif', 'mp4', 'mov', 'pdf', 'doc', 'docx', 'txt']
+// Local Storage fallback setup
+const uploadsDir = path.join(__dirname, '../uploads');
+if (!fs.existsSync(uploadsDir)) {
+    fs.mkdirSync(uploadsDir, { recursive: true });
+}
+
+const localStorage = multer.diskStorage({
+    destination: (req, file, cb) => cb(null, uploadsDir),
+    filename: (req, file, cb) => {
+        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+        cb(null, uniqueSuffix + '-' + file.originalname);
     }
 });
+
+let storage;
+if (process.env.CLOUDINARY_CLOUD_NAME && process.env.CLOUDINARY_API_KEY && process.env.CLOUDINARY_API_SECRET) {
+    try {
+        storage = new CloudinaryStorage({
+            cloudinary: cloudinary,
+            params: {
+                folder: 'orion_chat_media',
+                resource_type: 'auto'
+            }
+        });
+    } catch (e) {
+        console.warn('Cloudinary config failed, using local disk storage:', e);
+        storage = localStorage;
+    }
+} else {
+    storage = localStorage;
+}
 
 const upload = multer({ storage: storage });
 
 // Media Upload Endpoint
-router.post('/upload', upload.single('file'), (req, res) => {
-    if (!req.file) {
-        return res.status(400).send("No file uploaded.");
-    }
-    res.status(200).send({
-        url: req.file.path,
-        type: req.file.mimetype.split('/')[0] === 'image' ? 'image' :
-            req.file.mimetype.split('/')[0] === 'video' ? 'video' : 'document',
-        name: req.file.originalname
+router.post('/upload', (req, res) => {
+    upload.single('file')(req, res, (err) => {
+        if (err) {
+            console.error('File upload error:', err);
+            return res.status(500).send("File upload failed: " + (err.message || 'Server error'));
+        }
+        if (!req.file) {
+            return res.status(400).send("No file uploaded.");
+        }
+        const mimetype = req.file.mimetype || '';
+        let type = 'document';
+        if (mimetype.startsWith('image/')) type = 'image';
+        else if (mimetype.startsWith('video/')) type = 'video';
+        else if (mimetype.startsWith('audio/')) type = 'audio';
+
+        const fileUrl = (req.file.path && req.file.path.startsWith('http'))
+            ? req.file.path
+            : `${req.protocol}://${req.get('host')}/uploads/${path.basename(req.file.path || req.file.filename)}`;
+
+        res.status(200).send({
+            url: fileUrl,
+            type: type,
+            name: req.file.originalname
+        });
     });
 });
 
@@ -163,6 +200,27 @@ router.post('/', (req, res) => {
     }
 });
 
+// Update Group Details (Name)
+router.put('/:chatId', (req, res) => {
+    const { chatId } = req.params;
+    const { name, userId } = req.body;
+
+    if (!name || !name.trim()) return res.status(400).send("Group name is required.");
+
+    db.run(`UPDATE chats SET name = ? WHERE id = ?`, [name.trim(), chatId], (err) => {
+        if (err) return res.status(500).send("Error updating group name.");
+
+        if (req.io) {
+            req.io.to(chatId.toString()).emit('chat_updated', {
+                chatId: parseInt(chatId),
+                name: name.trim()
+            });
+        }
+
+        res.status(200).send({ success: true, chatId: parseInt(chatId), name: name.trim() });
+    });
+});
+
 // Get messages for a chat
 router.get('/:id/messages', (req, res) => {
     const chatId = req.params.id;
@@ -229,14 +287,20 @@ router.post('/messages/:messageId/react', (req, res) => {
     const messageId = req.params.messageId;
     const { userId, emoji } = req.body;
 
-    // Check if reaction exists
-    db.get(`SELECT id FROM message_reactions WHERE message_id = ? AND user_id = ? AND emoji = ?`, [messageId, userId, emoji], (err, existing) => {
-        if (err) return res.status(500).send("Error checking reaction.");
+    // Check message ownership to prevent reacting to own message
+    db.get(`SELECT sender_id, chat_id FROM messages WHERE id = ?`, [messageId], (err, msg) => {
+        if (err || !msg) return res.status(404).send("Message not found.");
 
-        const emitUpdate = (action) => {
-            // Get chat_id for this message to broadcast
-            db.get(`SELECT chat_id FROM messages WHERE id = ?`, [messageId], (err, msg) => {
-                if (!err && msg && req.io) {
+        if (parseInt(msg.sender_id) === parseInt(userId)) {
+            return res.status(403).send("You cannot react to your own message.");
+        }
+
+        // Check if reaction exists
+        db.get(`SELECT id FROM message_reactions WHERE message_id = ? AND user_id = ? AND emoji = ?`, [messageId, userId, emoji], (err, existing) => {
+            if (err) return res.status(500).send("Error checking reaction.");
+
+            const emitUpdate = (action) => {
+                if (req.io) {
                     req.io.to(msg.chat_id.toString()).emit('reaction_update', {
                         messageId: parseInt(messageId),
                         userId,
@@ -244,46 +308,120 @@ router.post('/messages/:messageId/react', (req, res) => {
                         action
                     });
                 }
-            });
-        };
+            };
 
-        if (existing) {
-            // Remove reaction
-            db.run(`DELETE FROM message_reactions WHERE id = ?`, [existing.id], (err) => {
-                if (err) return res.status(500).send("Error removing reaction.");
-                emitUpdate('removed');
-                res.status(200).send({ action: 'removed', messageId, emoji, userId });
-            });
-        } else {
-            // Add reaction
-            db.run(`INSERT INTO message_reactions (message_id, user_id, emoji) VALUES (?, ?, ?)`, [messageId, userId, emoji], (err) => {
-                if (err) return res.status(500).send("Error adding reaction.");
-                emitUpdate('added');
-                res.status(200).send({ action: 'added', messageId, emoji, userId });
-            });
+            if (existing) {
+                // Remove reaction
+                db.run(`DELETE FROM message_reactions WHERE id = ?`, [existing.id], (err) => {
+                    if (err) return res.status(500).send("Error removing reaction.");
+                    emitUpdate('removed');
+                    res.status(200).send({ action: 'removed', messageId, emoji, userId });
+                });
+            } else {
+                // Add reaction
+                db.run(`INSERT INTO message_reactions (message_id, user_id, emoji) VALUES (?, ?, ?)`, [messageId, userId, emoji], (err) => {
+                    if (err) return res.status(500).send("Error adding reaction.");
+                    emitUpdate('added');
+                    res.status(200).send({ action: 'added', messageId, emoji, userId });
+                });
+            }
+        });
+    });
+});
+
+// Toggle Poll Vote
+router.post('/messages/:messageId/poll/vote', (req, res) => {
+    const messageId = parseInt(req.params.messageId);
+    const { userId, optionId } = req.body;
+
+    if (isNaN(messageId)) {
+        return res.status(400).send("Invalid message ID.");
+    }
+
+    db.get(`SELECT chat_id, content, type FROM messages WHERE id = ?`, [messageId], (err, msg) => {
+        if (err) {
+            console.error('Error fetching poll message:', err);
+            return res.status(500).send("Error fetching poll message: " + err.message);
         }
+        if (!msg) {
+            console.warn(`Poll vote target message ID ${messageId} not found.`);
+            return res.status(404).send(`Message with ID ${messageId} not found.`);
+        }
+        if (msg.type !== 'poll') {
+            console.warn(`Message ${messageId} is type '${msg.type}', expected 'poll'.`);
+            return res.status(400).send("Message is not a poll.");
+        }
+
+        let pollData;
+        try {
+            pollData = typeof msg.content === 'string' ? JSON.parse(msg.content) : msg.content;
+        } catch (e) {
+            return res.status(500).send("Failed to parse poll data.");
+        }
+
+        const uid = parseInt(userId);
+        if (!pollData.options) return res.status(400).send("Invalid poll structure.");
+
+        // Toggle vote
+        pollData.options = pollData.options.map(opt => {
+            const voters = opt.voters || [];
+            if (opt.id === optionId) {
+                if (voters.includes(uid)) {
+                    // Remove vote
+                    return { ...opt, voters: voters.filter(v => v !== uid) };
+                } else {
+                    // Add vote
+                    return { ...opt, voters: [...voters, uid] };
+                }
+            } else if (!pollData.allowMultiple) {
+                // Remove vote from other options if multiple choice not allowed
+                return { ...opt, voters: voters.filter(v => v !== uid) };
+            }
+            return opt;
+        });
+
+        const updatedContent = JSON.stringify(pollData);
+
+        db.run(`UPDATE messages SET content = ? WHERE id = ?`, [updatedContent, messageId], (err) => {
+            if (err) return res.status(500).send("Error updating poll vote.");
+
+            if (req.io) {
+                req.io.to(msg.chat_id.toString()).emit('poll_update', {
+                    messageId: messageId,
+                    pollData
+                });
+            }
+
+            res.status(200).send({ success: true, pollData });
+        });
     });
 });
 
 // Delete message
 router.delete('/messages/:messageId', (req, res) => {
-    const messageId = req.params.messageId;
+    const messageId = parseInt(req.params.messageId);
     const { userId } = req.body;
+
+    if (isNaN(messageId)) {
+        return res.status(400).send("Invalid message ID.");
+    }
 
     // First, verify the user owns this message
     db.get(`SELECT chat_id, sender_id FROM messages WHERE id = ?`, [messageId], (err, message) => {
-        if (err) return res.status(500).send("Error checking message ownership.");
+        if (err) return res.status(500).send("Error checking message ownership: " + err.message);
         if (!message) return res.status(404).send("Message not found.");
-        if (message.sender_id !== userId) return res.status(403).send("You can only delete your own messages.");
+        if (parseInt(message.sender_id) !== parseInt(userId)) {
+            return res.status(403).send("You can only delete your own messages.");
+        }
 
         // Delete the message
         db.run(`DELETE FROM messages WHERE id = ?`, [messageId], (err) => {
-            if (err) return res.status(500).send("Error deleting message.");
+            if (err) return res.status(500).send("Error deleting message: " + err.message);
 
             // Emit socket event to chat room
             if (req.io) {
                 req.io.to(message.chat_id.toString()).emit('message_deleted', {
-                    messageId: parseInt(messageId),
+                    messageId: messageId,
                     chatId: message.chat_id
                 });
             }

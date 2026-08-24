@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Search, MoreHorizontal, MoreVertical, Send, Home, MessageCircle, Users, Heart, Bell, Plus, X, Paperclip, Check, CheckCheck, Reply, Forward, FileText, Play, Sticker, Smile, Download, Palette, Info, Clock } from 'lucide-react';
+import { Search, MoreHorizontal, MoreVertical, Send, Home, MessageCircle, Users, Heart, Bell, Plus, X, Paperclip, Check, CheckCheck, Reply, Forward, FileText, Play, Pause, Sticker, Smile, Download, Palette, Info, Clock, Camera, Music, BarChart2, UserCheck, Image as ImageIcon } from 'lucide-react';
 import EmojiPicker from 'emoji-picker-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from './context/AuthContext.jsx';
@@ -101,9 +101,21 @@ const ChatInterface = () => {
   const [showAddMemberModal, setShowAddMemberModal] = useState(false);
   const [activeReactionMessageId, setActiveReactionMessageId] = useState(null);
   const [activeMessageMenu, setActiveMessageMenu] = useState(null);
-  const [isChannel, setIsChannel] = useState(false);
   const fileInputRef = useRef(null);
   const profileImageRef = useRef(null);
+  const docInputRef = useRef(null);
+  const mediaInputRef = useRef(null);
+  const audioInputRef = useRef(null);
+  const cameraVideoRef = useRef(null);
+
+  const [showAttachmentMenu, setShowAttachmentMenu] = useState(false);
+  const [showPollModal, setShowPollModal] = useState(false);
+  const [pollQuestion, setPollQuestion] = useState('');
+  const [pollOptions, setPollOptions] = useState(['', '']);
+  const [showContactModal, setShowContactModal] = useState(false);
+  const [showCameraModal, setShowCameraModal] = useState(false);
+  const [isEditingGroupName, setIsEditingGroupName] = useState(false);
+  const [editGroupNameInput, setEditGroupNameInput] = useState('');
 
   // Theme & Profile View State
   const [activeTheme, setActiveTheme] = useState(() => localStorage.getItem('chat_theme') || 'light');
@@ -240,13 +252,22 @@ const ChatInterface = () => {
 
     socket.on('message_deleted', (data) => {
       console.log('Message deleted:', data);
-      setMessages(prev => prev.filter(m => m.id !== data.messageId));
+      setMessages(prev => prev.filter(m => m.id !== data.messageId && m.id !== parseInt(data.messageId)));
     });
 
     socket.on('chat_read', (data) => {
       if (selectedContact && data.chatId === selectedContact.id) {
         setMessages(prev => prev.map(m => m.isOwn ? { ...m, status: 'read' } : m));
       }
+    });
+
+    socket.on('poll_update', (data) => {
+      setMessages(prev => prev.map(m => m.id === data.messageId ? { ...m, message: JSON.stringify(data.pollData) } : m));
+    });
+
+    socket.on('chat_updated', (data) => {
+      setContacts(prev => prev.map(c => c.id === data.chatId ? { ...c, name: data.name } : c));
+      setSelectedContact(prev => (prev && prev.id === data.chatId ? { ...prev, name: data.name } : prev));
     });
 
     // Mark current chat as read when focused
@@ -478,9 +499,10 @@ const ChatInterface = () => {
   };
 
   const handleSendMessage = async (overrideData = {}) => {
-    if ((!messageInput.trim() && !overrideData.media_url) || !selectedContact) return;
+    const rawContent = overrideData.content !== undefined ? overrideData.content : messageInput;
+    if ((!rawContent.trim() && !overrideData.media_url) || !selectedContact) return;
 
-    let content = messageInput;
+    let content = rawContent;
     let type = overrideData.type || 'text';
 
     // E2EE for private chats
@@ -557,30 +579,132 @@ const ChatInterface = () => {
     }
   };
 
-  const confirmForward = (chatId) => {
-    if (!forwardingMessage) return;
-
-    const messageData = {
-      chatId: chatId,
-      senderId: user.id,
-      content: forwardingMessage.message,
-      type: forwardingMessage.type,
-      media_url: forwardingMessage.media_url,
-      forwarded_from_id: forwardingMessage.id
-    };
-
-    socket.emit('send_message', messageData);
-    setShowForwardModal(false);
-    setForwardingMessage(null);
-
-    // Switch to the chat if not already there?
-    const contact = contacts.find(c => c.id === chatId);
-    if (contact) {
-      setSelectedContact(contact);
+  const handleUpdateGroupName = async (newName) => {
+    if (!newName || !newName.trim() || !selectedContact) return;
+    try {
+      const res = await api.put(`/chats/${selectedContact.id}`, {
+        name: newName.trim(),
+        userId: user.id
+      });
+      if (res.data.success) {
+        const updatedName = newName.trim();
+        setSelectedContact(prev => ({ ...prev, name: updatedName }));
+        setContacts(prev => prev.map(c => c.id === selectedContact.id ? { ...c, name: updatedName } : c));
+        setIsEditingGroupName(false);
+      }
+    } catch (error) {
+      console.error('Error updating group name:', error);
+      alert('Failed to update group name.');
     }
   };
 
+  const handlePollVote = async (messageId, optionId) => {
+    try {
+      await api.post(`/chats/messages/${messageId}/poll/vote`, {
+        userId: user.id,
+        optionId
+      });
+    } catch (error) {
+      console.error('Error voting on poll:', error);
+    }
+  };
+
+  const handleCreatePoll = () => {
+    if (!selectedContact) return;
+    if (!pollQuestion.trim()) return alert('Please enter a question for the poll.');
+    const validOptions = pollOptions.filter(o => o.trim().length > 0);
+    if (validOptions.length < 2) return alert('Please enter at least 2 options.');
+
+    const pollData = {
+      question: pollQuestion.trim(),
+      options: validOptions.map((opt, idx) => ({
+        id: `opt_${idx}_${Date.now()}`,
+        text: opt.trim(),
+        voters: []
+      }))
+    };
+
+    handleSendMessage({
+      content: JSON.stringify(pollData),
+      type: 'poll'
+    });
+
+    setShowPollModal(false);
+    setPollQuestion('');
+    setPollOptions(['', '']);
+    setShowAttachmentMenu(false);
+  };
+
+  const handleShareContact = (contactUser) => {
+    if (!selectedContact) return;
+    const contactData = {
+      id: contactUser.id,
+      username: contactUser.name || contactUser.username,
+      email: contactUser.email || ''
+    };
+
+    handleSendMessage({
+      content: JSON.stringify(contactData),
+      type: 'contact'
+    });
+
+    setShowContactModal(false);
+    setShowAttachmentMenu(false);
+  };
+
+  const startCamera = async () => {
+    setShowCameraModal(true);
+    setShowAttachmentMenu(false);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+      if (cameraVideoRef.current) {
+        cameraVideoRef.current.srcObject = stream;
+      }
+    } catch (err) {
+      console.error('Camera access error:', err);
+    }
+  };
+
+  const capturePhoto = () => {
+    if (!cameraVideoRef.current) return;
+    const canvas = document.createElement('canvas');
+    canvas.width = cameraVideoRef.current.videoWidth || 640;
+    canvas.height = cameraVideoRef.current.videoHeight || 480;
+    const ctx = canvas.getContext('2d');
+    if (ctx) {
+      ctx.drawImage(cameraVideoRef.current, 0, 0, canvas.width, canvas.height);
+      canvas.toBlob((blob) => {
+        if (blob) {
+          const file = new File([blob], `camera_${Date.now()}.png`, { type: 'image/png' });
+          const formData = new FormData();
+          formData.append('file', file);
+          api.post('/chats/upload', formData).then(res => {
+            handleSendMessage({
+              content: `Sent a photo`,
+              type: res.data.type,
+              media_url: res.data.url
+            });
+          });
+        }
+      }, 'image/png');
+    }
+    stopCamera();
+  };
+
+  const stopCamera = () => {
+    if (cameraVideoRef.current && cameraVideoRef.current.srcObject) {
+      const stream = cameraVideoRef.current.srcObject;
+      stream.getTracks().forEach(t => t.stop());
+    }
+    setShowCameraModal(false);
+  };
+
   const handleReaction = async (messageId, emoji) => {
+    const targetMsg = messages.find(m => m.id === messageId);
+    if (targetMsg && (targetMsg.isOwn || targetMsg.sender_id === user.id)) {
+      console.log('Cannot react to own message');
+      return;
+    }
     try {
       console.log('Sending reaction:', { messageId, emoji, userId: user.id });
       await api.post(`/chats/messages/${messageId}/react`, {
@@ -598,14 +722,17 @@ const ChatInterface = () => {
       return;
     }
 
+    // Immediately remove message from UI state (Optimistic update)
+    setMessages(prev => prev.filter(m => m.id !== messageId && m.id !== parseInt(messageId)));
+
     try {
       await api.delete(`/chats/messages/${messageId}`, {
         data: { userId: user.id }
       });
-      // Message will be removed via socket event
     } catch (error) {
       console.error('Error deleting message:', error);
       alert('Failed to delete message. You can only delete your own messages.');
+      if (selectedContact) fetchMessages(selectedContact.id);
     }
   };
 
@@ -1166,8 +1293,96 @@ const ChatInterface = () => {
                       <img src={message.media_url} alt="GIF" style={styles.mediaGif} />
                     )}
 
-                    {message.type === 'sticker' && (
-                      <img src={message.media_url} alt="Sticker" style={styles.mediaSticker} />
+                    {message.type === 'poll' && (() => {
+                      let pollData = null;
+                      try {
+                        pollData = typeof message.message === 'string' ? JSON.parse(message.message) : message.message;
+                      } catch (e) { }
+
+                      if (!pollData || !pollData.options) return <p style={styles.messageText}>{message.message}</p>;
+
+                      const totalVotes = pollData.options.reduce((acc, cur) => acc + (cur.voters?.length || 0), 0);
+
+                      return (
+                        <div style={{ minWidth: '240px', padding: '4px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 'bold', marginBottom: '10px' }}>
+                            <BarChart2 size={18} color="#f59e0b" />
+                            <span>{pollData.question}</span>
+                          </div>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                            {pollData.options?.map((opt) => {
+                              const optVotes = opt.voters?.length || 0;
+                              const pct = totalVotes > 0 ? Math.round((optVotes / totalVotes) * 100) : 0;
+                              const hasVoted = opt.voters?.includes(user.id);
+
+                              return (
+                                <button
+                                  key={opt.id}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handlePollVote(message.id, opt.id);
+                                  }}
+                                  style={{
+                                    position: 'relative',
+                                    overflow: 'hidden',
+                                    width: '100%',
+                                    textAlign: 'left',
+                                    padding: '10px',
+                                    borderRadius: '8px',
+                                    border: hasVoted ? '1px solid #f59e0b' : '1px solid rgba(156, 163, 175, 0.4)',
+                                    backgroundColor: 'rgba(0,0,0,0.05)',
+                                    cursor: 'pointer'
+                                  }}
+                                >
+                                  <div
+                                    style={{
+                                      position: 'absolute',
+                                      top: 0,
+                                      left: 0,
+                                      bottom: 0,
+                                      width: `${pct}%`,
+                                      backgroundColor: 'rgba(245, 158, 11, 0.2)',
+                                      transition: 'width 0.3s ease'
+                                    }}
+                                  />
+                                  <div style={{ position: 'relative', zIndex: 1, display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
+                                    <span style={{ fontWeight: '600' }}>{opt.text}</span>
+                                    <span style={{ fontWeight: 'bold' }}>{pct}% ({optVotes})</span>
+                                  </div>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })()}
+
+                    {message.type === 'contact' && (() => {
+                      let contactData = null;
+                      try {
+                        contactData = typeof message.message === 'string' ? JSON.parse(message.message) : message.message;
+                      } catch (e) { }
+
+                      if (!contactData) return <p style={styles.messageText}>{message.message}</p>;
+
+                      return (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '8px', backgroundColor: 'rgba(0,0,0,0.05)', borderRadius: '12px', minWidth: '200px' }}>
+                          <div style={{ width: '40px', height: '40px', borderRadius: '50%', backgroundColor: 'rgba(6, 182, 212, 0.2)', color: '#06b6d4', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold' }}>
+                            <UserCheck size={22} />
+                          </div>
+                          <div>
+                            <p style={{ margin: 0, fontWeight: 'bold', fontSize: '14px' }}>{contactData.username}</p>
+                            <p style={{ margin: 0, fontSize: '12px', opacity: 0.7 }}>{contactData.email}</p>
+                          </div>
+                        </div>
+                      );
+                    })()}
+
+                    {message.type === 'audio' && (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '4px' }}>
+                        <Music size={24} color="#f59e0b" />
+                        <audio src={message.media_url} controls style={{ height: '32px', maxWidth: '240px' }} />
+                      </div>
                     )}
 
                     {message.type === 'text' && (
@@ -1206,7 +1421,9 @@ const ChatInterface = () => {
                             }}
                             onClick={(e) => {
                               e.stopPropagation();
-                              handleReaction(message.id, r.emoji);
+                              if (!message.isOwn) {
+                                handleReaction(message.id, r.emoji);
+                              }
                             }}
                           >
                             <span>{r.emoji}</span>
@@ -1230,16 +1447,18 @@ const ChatInterface = () => {
                         {/* Dropdown Menu */}
                         {activeMessageMenu === message.id && (
                           <div style={styles.messageDropdown} onClick={(e) => e.stopPropagation()}>
-                            <div
-                              style={styles.dropdownItem}
-                              onClick={() => {
-                                setActiveReactionMessageId(message.id);
-                                setActiveMessageMenu(null);
-                              }}
-                            >
-                              <Heart size={14} style={{ marginRight: '8px' }} />
-                              React
-                            </div>
+                            {!message.isOwn && (
+                              <div
+                                style={styles.dropdownItem}
+                                onClick={() => {
+                                  setActiveReactionMessageId(message.id);
+                                  setActiveMessageMenu(null);
+                                }}
+                              >
+                                <Heart size={14} style={{ marginRight: '8px' }} />
+                                React
+                              </div>
+                            )}
                             <div
                               style={styles.dropdownItem}
                               onClick={() => {
@@ -1326,12 +1545,101 @@ const ChatInterface = () => {
                   style={{ display: 'none' }}
                   onChange={handleFileUpload}
                 />
+                <input type="file" ref={docInputRef} style={{ display: 'none' }} accept=".pdf,.doc,.docx,.txt,.zip" onChange={handleFileUpload} />
+                <input type="file" ref={mediaInputRef} style={{ display: 'none' }} accept="image/*,video/*" onChange={handleFileUpload} />
+                <input type="file" ref={audioInputRef} style={{ display: 'none' }} accept="audio/*" onChange={handleFileUpload} />
+
+                {/* Floating WhatsApp/Telegram Attachment Grid Menu */}
+                {showAttachmentMenu && (
+                  <div
+                    style={{
+                      position: 'absolute',
+                      bottom: '75px',
+                      left: '20px',
+                      zIndex: 1000,
+                      backgroundColor: activeTheme === 'dark' || activeTheme === 'midnight' ? '#111827' : '#ffffff',
+                      border: '1px solid rgba(255,255,255,0.1)',
+                      borderRadius: '24px',
+                      padding: '16px',
+                      boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.3)',
+                      display: 'grid',
+                      gridTemplateColumns: 'repeat(3, 1fr)',
+                      gap: '16px',
+                      width: '310px'
+                    }}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <button
+                      onClick={() => { docInputRef.current.click(); setShowAttachmentMenu(false); }}
+                      style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', background: 'none', border: 'none', cursor: 'pointer' }}
+                    >
+                      <div style={{ width: '48px', height: '48px', borderRadius: '16px', backgroundColor: 'rgba(147, 51, 234, 0.15)', color: '#a855f7', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <FileText size={24} />
+                      </div>
+                      <span style={{ fontSize: '12px', fontWeight: '600', color: activeTheme === 'dark' || activeTheme === 'midnight' ? '#e5e7eb' : '#374151' }}>Document</span>
+                    </button>
+
+                    <button
+                      onClick={() => { mediaInputRef.current.click(); setShowAttachmentMenu(false); }}
+                      style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', background: 'none', border: 'none', cursor: 'pointer' }}
+                    >
+                      <div style={{ width: '48px', height: '48px', borderRadius: '16px', backgroundColor: 'rgba(59, 130, 246, 0.15)', color: '#3b82f6', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <ImageIcon size={24} />
+                      </div>
+                      <span style={{ fontSize: '12px', fontWeight: '600', color: activeTheme === 'dark' || activeTheme === 'midnight' ? '#e5e7eb' : '#374151' }}>Media</span>
+                    </button>
+
+                    <button
+                      onClick={startCamera}
+                      style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', background: 'none', border: 'none', cursor: 'pointer' }}
+                    >
+                      <div style={{ width: '48px', height: '48px', borderRadius: '16px', backgroundColor: 'rgba(16, 185, 129, 0.15)', color: '#10b981', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <Camera size={24} />
+                      </div>
+                      <span style={{ fontSize: '12px', fontWeight: '600', color: activeTheme === 'dark' || activeTheme === 'midnight' ? '#e5e7eb' : '#374151' }}>Camera</span>
+                    </button>
+
+                    <button
+                      onClick={() => { audioInputRef.current.click(); setShowAttachmentMenu(false); }}
+                      style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', background: 'none', border: 'none', cursor: 'pointer' }}
+                    >
+                      <div style={{ width: '48px', height: '48px', borderRadius: '16px', backgroundColor: 'rgba(245, 158, 11, 0.15)', color: '#f59e0b', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <Music size={24} />
+                      </div>
+                      <span style={{ fontSize: '12px', fontWeight: '600', color: activeTheme === 'dark' || activeTheme === 'midnight' ? '#e5e7eb' : '#374151' }}>Audio</span>
+                    </button>
+
+                    <button
+                      onClick={() => { setShowPollModal(true); setShowAttachmentMenu(false); }}
+                      style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', background: 'none', border: 'none', cursor: 'pointer' }}
+                    >
+                      <div style={{ width: '48px', height: '48px', borderRadius: '16px', backgroundColor: 'rgba(234, 179, 8, 0.15)', color: '#eab308', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <BarChart2 size={24} />
+                      </div>
+                      <span style={{ fontSize: '12px', fontWeight: '600', color: activeTheme === 'dark' || activeTheme === 'midnight' ? '#e5e7eb' : '#374151' }}>Poll</span>
+                    </button>
+
+                    <button
+                      onClick={() => { setShowContactModal(true); setShowAttachmentMenu(false); }}
+                      style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', background: 'none', border: 'none', cursor: 'pointer' }}
+                    >
+                      <div style={{ width: '48px', height: '48px', borderRadius: '16px', backgroundColor: 'rgba(6, 182, 212, 0.15)', color: '#06b6d4', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <UserCheck size={24} />
+                      </div>
+                      <span style={{ fontSize: '12px', fontWeight: '600', color: activeTheme === 'dark' || activeTheme === 'midnight' ? '#e5e7eb' : '#374151' }}>Contact</span>
+                    </button>
+                  </div>
+                )}
+
                 <button
                   style={styles.attachButton}
-                  onClick={() => fileInputRef.current.click()}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setShowAttachmentMenu(!showAttachmentMenu);
+                  }}
                   disabled={isUploading}
                 >
-                  {isUploading ? <div style={styles.spinner}></div> : <Paperclip size={20} />}
+                  {isUploading ? <div style={styles.spinner}></div> : <Paperclip size={20} color={showAttachmentMenu ? '#007AFF' : '#6b7280'} />}
                 </button>
                 <input
                   type="text"
@@ -1735,7 +2043,18 @@ const ChatInterface = () => {
                 <div style={{ ...styles.chatAvatar, width: '80px', height: '80px', fontSize: '32px', marginBottom: '16px' }}>
                   {selectedContact.avatar || '👥'}
                 </div>
-                <h3 style={{ margin: '0 0 8px 0', fontSize: '20px' }}>{selectedContact.name}</h3>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                  <h3 style={{ margin: 0, fontSize: '20px' }}>{selectedContact.name}</h3>
+                  <button
+                    onClick={() => {
+                      setEditGroupNameInput(selectedContact.name);
+                      setIsEditingGroupName(true);
+                    }}
+                    style={{ border: 'none', background: 'none', color: '#3b82f6', cursor: 'pointer', fontSize: '13px', fontWeight: 'bold' }}
+                  >
+                    ✏️ Edit
+                  </button>
+                </div>
                 {selectedContact.invite_code && (
                   <div style={{ backgroundColor: '#f3f4f6', padding: '8px 12px', borderRadius: '8px', display: 'flex', gap: '8px', alignItems: 'center', marginTop: '8px' }}>
                     <code style={{ fontSize: '12px' }}>{selectedContact.invite_code}</code>
@@ -2087,7 +2406,132 @@ const ChatInterface = () => {
         </div>
       )}
 
-    </div >
+      {/* Edit Group Name Modal */}
+      {isEditingGroupName && (
+        <div style={styles.modalOverlay} onClick={() => setIsEditingGroupName(false)}>
+          <div style={{ ...styles.modalContent, width: '400px', padding: '24px' }} onClick={(e) => e.stopPropagation()}>
+            <div style={styles.modalHeader}>
+              <h2 style={styles.modalTitle}>Change Group Name</h2>
+              <X size={24} style={{ cursor: 'pointer', color: '#6b7280' }} onClick={() => setIsEditingGroupName(false)} />
+            </div>
+            <input
+              type="text"
+              value={editGroupNameInput}
+              onChange={(e) => setEditGroupNameInput(e.target.value)}
+              placeholder="Enter new group name"
+              style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #d1d5db', marginBottom: '16px', fontSize: '14px' }}
+            />
+            <button
+              onClick={() => handleUpdateGroupName(editGroupNameInput)}
+              style={{ width: '100%', padding: '12px', backgroundColor: '#3b82f6', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' }}
+            >
+              Save Group Name
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Poll Creation Modal */}
+      {showPollModal && (
+        <div style={styles.modalOverlay} onClick={() => setShowPollModal(false)}>
+          <div style={{ ...styles.modalContent, width: '420px', padding: '24px' }} onClick={(e) => e.stopPropagation()}>
+            <div style={styles.modalHeader}>
+              <h2 style={styles.modalTitle}>Create Poll</h2>
+              <X size={24} style={{ cursor: 'pointer', color: '#6b7280' }} onClick={() => setShowPollModal(false)} />
+            </div>
+            <input
+              type="text"
+              value={pollQuestion}
+              onChange={(e) => setPollQuestion(e.target.value)}
+              placeholder="Ask a question..."
+              style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #d1d5db', marginBottom: '16px', fontSize: '14px' }}
+            />
+            <p style={{ fontSize: '12px', fontWeight: 'bold', color: '#6b7280', marginBottom: '8px', textTransform: 'uppercase' }}>Options</p>
+            {pollOptions.map((opt, idx) => (
+              <input
+                key={idx}
+                type="text"
+                value={opt}
+                onChange={(e) => {
+                  const newOpts = [...pollOptions];
+                  newOpts[idx] = e.target.value;
+                  setPollOptions(newOpts);
+                }}
+                placeholder={`Option ${idx + 1}`}
+                style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #d1d5db', marginBottom: '8px', fontSize: '14px' }}
+              />
+            ))}
+            {pollOptions.length < 5 && (
+              <button
+                onClick={() => setPollOptions([...pollOptions, ''])}
+                style={{ border: 'none', background: 'none', color: '#3b82f6', cursor: 'pointer', fontWeight: 'bold', fontSize: '12px', marginBottom: '16px' }}
+              >
+                + Add Option
+              </button>
+            )}
+            <button
+              onClick={handleCreatePoll}
+              style={{ width: '100%', padding: '12px', backgroundColor: '#f59e0b', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', fontSize: '14px' }}
+            >
+              Send Poll
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Share Contact Modal */}
+      {showContactModal && (
+        <div style={styles.modalOverlay} onClick={() => setShowContactModal(false)}>
+          <div style={{ ...styles.modalContent, width: '420px', padding: '24px' }} onClick={(e) => e.stopPropagation()}>
+            <div style={styles.modalHeader}>
+              <h2 style={styles.modalTitle}>Share Contact</h2>
+              <X size={24} style={{ cursor: 'pointer', color: '#6b7280' }} onClick={() => setShowContactModal(false)} />
+            </div>
+            <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
+              {contacts.map(c => (
+                <div
+                  key={c.id}
+                  onClick={() => handleShareContact(c)}
+                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px', borderRadius: '8px', borderBottom: '1px solid #f3f4f6', cursor: 'pointer' }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <div style={{ width: '36px', height: '36px', borderRadius: '50%', backgroundColor: '#06b6d4', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold' }}>
+                      {(c.name || 'C')[0]}
+                    </div>
+                    <div>
+                      <p style={{ margin: 0, fontWeight: 'bold', fontSize: '14px' }}>{c.name}</p>
+                    </div>
+                  </div>
+                  <span style={{ fontSize: '12px', color: '#3b82f6', fontWeight: 'bold' }}>Share</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Camera WebCam Modal */}
+      {showCameraModal && (
+        <div style={styles.modalOverlay} onClick={stopCamera}>
+          <div style={{ ...styles.modalContent, width: '440px', padding: '24px' }} onClick={(e) => e.stopPropagation()}>
+            <div style={styles.modalHeader}>
+              <h2 style={styles.modalTitle}>Camera Snapshot</h2>
+              <X size={24} style={{ cursor: 'pointer', color: '#6b7280' }} onClick={stopCamera} />
+            </div>
+            <div style={{ width: '100%', backgroundColor: '#000', borderRadius: '12px', overflow: 'hidden', marginBottom: '16px', aspectRatio: '16/9' }}>
+              <video ref={cameraVideoRef} autoPlay playsInline style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            </div>
+            <button
+              onClick={capturePhoto}
+              style={{ width: '100%', padding: '12px', backgroundColor: '#10b981', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', fontSize: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
+            >
+              <Camera size={20} /> Snap Photo & Send
+            </button>
+          </div>
+        </div>
+      )}
+
+    </div>
   );
 };
 

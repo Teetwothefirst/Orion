@@ -181,6 +181,7 @@ const initDb = () => {
         db.query("ALTER TABLE chats ADD COLUMN IF NOT EXISTS invite_code TEXT UNIQUE").catch(() => { });
         db.query("ALTER TABLE chat_participants ADD COLUMN IF NOT EXISTS id SERIAL PRIMARY KEY").catch(() => { });
         db.query("ALTER TABLE chat_participants ADD COLUMN IF NOT EXISTS role TEXT DEFAULT 'member'").catch(() => { });
+        db.query("ALTER TABLE messages ADD COLUMN IF NOT EXISTS scheduled_for TIMESTAMP").catch(() => { });
     } else {
         db.serialize(() => {
             queries.forEach((q, index) => {

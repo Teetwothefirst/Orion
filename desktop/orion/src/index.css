@@ -70,7 +70,7 @@
 }
 
 .wa-bg-pattern {
-  background-image: url('/whatsapp-bg.jpg');
+  background-image: url('./whatsapp-bg.jpg');
   background-repeat: repeat;
   background-size: 400px;
   background-color: var(--wa-bg-chat);

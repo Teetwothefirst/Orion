@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
-import AuthForm from '../components/AuthForm';
-import type { User, Message } from '../hooks/useSocket';
-import { useSocket } from '../hooks/useSocket';
-import { API_URL } from '../lib/config';
+import AuthForm from './components/AuthForm';
+import type { User, Message } from './hooks/useSocket';
+import { useSocket } from './hooks/useSocket';
+import { API_URL } from './lib/config';
 import {
     LogOut, Users, MessageSquare, Settings, Send, Plus, X,
     FileText, Image as ImageIcon, Camera, Music, BarChart2, UserCheck,

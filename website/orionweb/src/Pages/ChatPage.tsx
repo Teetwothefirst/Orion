@@ -4,14 +4,14 @@ import type { User, Message } from '../hooks/useSocket';
 import { useSocket } from '../hooks/useSocket';
 import { API_URL } from '../lib/config';
 import {
-    LogOut, Users, MessageSquare, Settings, Send, Plus, X,
-    FileText, Image as ImageIcon, Camera, Music, BarChart2, UserCheck,
+    LogOut, Users, MessageSquare, Send, X,
+    FileText, Image as ImageIcon, Camera, BarChart2, UserCheck,
     Download, Play, Pause, Smile, Search, MoreVertical, Paperclip,
-    Mic, Check, CheckCheck, ChevronDown, Trash2, Forward, Reply
+    Mic, CheckCheck, ChevronDown, Trash2, Forward
 } from 'lucide-react';
 
 interface ChatPageProps {
-    onBackToHome: () => void;
+    onBackToHome?: () => void;
 }
 
 const REACTION_EMOJIS = ['❤️', '👍', '😂', '😮', '😢', '🔥'];
@@ -22,7 +22,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ onBackToHome }) => {
     const [activeTab, setActiveTab] = useState<'users' | 'groups'>('users');
     const [selectedChat, setSelectedChat] = useState<{ id: number; type: 'private' | 'group', name: string } | null>(null);
     const [messageInput, setMessageInput] = useState('');
-    const [isCreateGroupOpen, setIsCreateGroupOpen] = useState(false);
+    const [_isCreateGroupOpen, setIsCreateGroupOpen] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
 
     const [showAttachmentMenu, setShowAttachmentMenu] = useState(false);
@@ -50,7 +50,6 @@ const ChatPage: React.FC<ChatPageProps> = ({ onBackToHome }) => {
     const audioInputRef = useRef<HTMLInputElement>(null);
 
     const {
-        isConnected,
         users,
         setUsers,
         chats,
@@ -141,6 +140,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ onBackToHome }) => {
         setToken(null);
         localStorage.removeItem('token');
         localStorage.removeItem('user');
+        if (onBackToHome) onBackToHome();
     };
 
     const handleSendMessage = (e: React.FormEvent) => {

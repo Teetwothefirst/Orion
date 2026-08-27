@@ -161,6 +161,12 @@ const initDb = () => {
             emoji TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             UNIQUE(message_id, user_id, emoji)
+        )`,
+        `CREATE TABLE IF NOT EXISTS message_deletions (
+            message_id INTEGER,
+            user_id INTEGER,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(message_id, user_id)
         )`
     ];
 

@@ -1,9 +1,8 @@
 import * as React from 'react';
 // import { createRoot } from 'react-dom/client';
 import * as ReactDOM from "react-dom/client";
-import Auth from './Auth.jsx';
-import ChatInterface from './ChatInterface.jsx'
-import { AuthProvider } from './context/AuthContext.jsx';
+import Auth from './components/AuthForm.tsx';
+import ChatInterface from './ChatInterface.tsx';
 import {
   createBrowserRouter,
   RouterProvider,
@@ -60,16 +59,11 @@ class ErrorBoundary extends React.Component {
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
     <ErrorBoundary>
-      <AuthProvider>
-        <HashRouter>
-          <Routes>
-            <Route path="/" element={<Auth />} />
-            <Route path='/chat' element={<ChatInterface />} />
-            {/* <Route path='/forgotPassword' element={<ForgotPassword />} />
-            <Route path='/resetPassword' element={<ResetPassword />} /> */}
-          </Routes>
-        </HashRouter>
-      </AuthProvider>
+      <HashRouter>
+        <Routes>
+          <Route path="/" element={<ChatInterface />} />
+        </Routes>
+      </HashRouter>
     </ErrorBoundary>
   </React.StrictMode>
 );

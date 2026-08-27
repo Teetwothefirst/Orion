@@ -224,6 +224,7 @@ router.put('/:chatId', (req, res) => {
 // Get messages for a chat
 router.get('/:id/messages', (req, res) => {
     const chatId = req.params.id;
+    const userId = req.query.userId;
 
     const sql = `
         SELECT m.*, u.username, u.avatar,
@@ -231,11 +232,12 @@ router.get('/:id/messages', (req, res) => {
         FROM messages m
         JOIN users u ON m.sender_id = u.id
         LEFT JOIN messages r ON m.reply_to_id = r.id
-        WHERE m.chat_id = ?
+        WHERE m.chat_id = ? 
+          AND m.id NOT IN (SELECT message_id FROM message_deletions WHERE user_id = ?)
         ORDER BY m.created_at ASC
     `;
 
-    db.all(sql, [chatId], (err, messages) => {
+    db.all(sql, [chatId, userId || 0], (err, messages) => {
         if (err) return res.status(500).send("Error retrieving messages.");
 
         if (messages.length === 0) {
@@ -428,6 +430,24 @@ router.delete('/messages/:messageId', (req, res) => {
 
             res.status(200).send({ success: true, messageId });
         });
+    });
+});
+
+// Delete message for me
+router.post('/messages/:messageId/delete-for-me', (req, res) => {
+    const messageId = parseInt(req.params.messageId);
+    const { userId } = req.body;
+
+    if (isNaN(messageId) || !userId) {
+        return res.status(400).send("Invalid input.");
+    }
+
+    db.run(`INSERT OR IGNORE INTO message_deletions (message_id, user_id) VALUES (?, ?)`, [messageId, userId], (err) => {
+        if (err) {
+            console.error('Error soft deleting message:', err);
+            return res.status(500).send("Error soft deleting message.");
+        }
+        res.status(200).send({ success: true, messageId });
     });
 });
 

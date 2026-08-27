@@ -17,12 +17,12 @@ module.exports = [
     },
   },
   {
-    test: /\.jsx?$/,
+    test: /\.(js|jsx|ts|tsx)$/,
     use: {
       loader: 'babel-loader',
       options: {
         exclude: [/node_modules/, /preload\.js$/],
-        presets: ['@babel/preset-react'],
+        presets: ['@babel/preset-env', '@babel/preset-react', '@babel/preset-typescript'],
         cacheDirectory: true
       }
     }

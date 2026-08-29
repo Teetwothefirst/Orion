@@ -4,10 +4,10 @@ import type { User, Message } from '../hooks/useSocket';
 import { useSocket } from '../hooks/useSocket';
 import { API_URL } from '../lib/config';
 import {
-    LogOut, Users, MessageSquare, Send, X,
+    LogOut, Users, MessageSquare, Send, X, Check,
     FileText, Image as ImageIcon, Camera, BarChart2, UserCheck,
     Download, Play, Pause, Smile, Search, MoreVertical, Paperclip,
-    Mic, CheckCheck, ChevronDown, Trash2, Forward
+    Mic, CheckCheck, ChevronDown, Trash2, Forward, Sun, Moon, User as UserIcon, BellOff, Settings
 } from 'lucide-react';
 
 interface ChatPageProps {
@@ -16,13 +16,22 @@ interface ChatPageProps {
 
 const REACTION_EMOJIS = ['❤️', '👍', '😂', '😮', '😢', '🔥'];
 
+const EMOJI_CATEGORIES = [
+    { category: 'Smileys', emojis: ['😀', '😃', '😄', '😁', '😆', '😅', '😂', '🤣', '😊', '😇', '🙂', '🙃', '😉', '😌', '😍', '🥰', '😘', '😗', '😙', '😚'] },
+    { category: 'Gestures', emojis: ['👍', '👎', '👏', '🙌', '👐', '🤲', '🤝', '🙏', '✌️', '🤘', '👌', '🤏', '👈', '👉', '👆', '👇', '☝️', '✋', '🖐️', '🖐'] },
+    { category: 'Hearts & Expressions', emojis: ['❤️', '🧡', '💛', '💚', '💙', '💜', '🖤', '🤍', '🤎', '💔', '❣️', '💕', '💞', '💓', '💗', '💖', '💘', '💝', '🔥', '✨'] },
+    { category: 'Celebration & Symbols', emojis: ['🎉', '🎊', '🎈', '🎁', '🏆', '⭐', '🌟', '💥', '💯', '✅', '❌', '⚠️', '⚡', '💡', '🎵', '🎶', '📌', '📍', '💬', '📢'] }
+];
+
 const ChatPage: React.FC<ChatPageProps> = ({ onBackToHome }) => {
     const [user, setUser] = useState<User | null>(null);
     const [token, setToken] = useState<string | null>(localStorage.getItem('token'));
     const [activeTab, setActiveTab] = useState<'users' | 'groups'>('users');
     const [selectedChat, setSelectedChat] = useState<{ id: number; type: 'private' | 'group', name: string } | null>(null);
     const [messageInput, setMessageInput] = useState('');
-    const [_isCreateGroupOpen, setIsCreateGroupOpen] = useState(false);
+    const [isCreateGroupOpen, setIsCreateGroupOpen] = useState(false);
+    const [groupName, setGroupName] = useState('');
+    const [selectedGroupMembers, setSelectedGroupMembers] = useState<number[]>([]);
     const [searchQuery, setSearchQuery] = useState('');
 
     const [showAttachmentMenu, setShowAttachmentMenu] = useState(false);
@@ -38,12 +47,24 @@ const ChatPage: React.FC<ChatPageProps> = ({ onBackToHome }) => {
     const [showContactModal, setShowContactModal] = useState(false);
     const [showCameraModal, setShowCameraModal] = useState(false);
 
+    const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+    const [showMainDropdown, setShowMainDropdown] = useState(false);
+    const [showContactDrawer, setShowContactDrawer] = useState(false);
+
+    const [showProfileModal, setShowProfileModal] = useState(false);
+    const [showSettingsModal, setShowSettingsModal] = useState(false);
+    const [userStatusBio, setUserStatusBio] = useState('Hey there! I am using Orion.');
+    const [isMuted, setIsMuted] = useState(false);
+    const [isDarkMode, setIsDarkMode] = useState(() => document.documentElement.classList.contains('dark'));
+
     const [playingAudioId, setPlayingAudioId] = useState<number | null>(null);
 
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const attachmentMenuRef = useRef<HTMLDivElement>(null);
     const reactionPickerRef = useRef<HTMLDivElement>(null);
     const msgMenuRef = useRef<HTMLDivElement>(null);
+    const mainDropdownRef = useRef<HTMLDivElement>(null);
+    const emojiPickerRef = useRef<HTMLDivElement>(null);
     const videoRef = useRef<HTMLVideoElement>(null);
     const docInputRef = useRef<HTMLInputElement>(null);
     const mediaInputRef = useRef<HTMLInputElement>(null);
@@ -67,6 +88,11 @@ const ChatPage: React.FC<ChatPageProps> = ({ onBackToHome }) => {
         if (savedUser) setUser(JSON.parse(savedUser));
     }, []);
 
+    const toggleDarkMode = () => {
+        document.documentElement.classList.toggle('dark');
+        setIsDarkMode(prev => !prev);
+    };
+
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
             if (attachmentMenuRef.current && !attachmentMenuRef.current.contains(event.target as Node)) {
@@ -78,10 +104,38 @@ const ChatPage: React.FC<ChatPageProps> = ({ onBackToHome }) => {
             if (msgMenuRef.current && !msgMenuRef.current.contains(event.target as Node)) {
                 setActiveMsgMenu(null);
             }
+            if (mainDropdownRef.current && !mainDropdownRef.current.contains(event.target as Node)) {
+                setShowMainDropdown(false);
+            }
+            if (emojiPickerRef.current && !emojiPickerRef.current.contains(event.target as Node)) {
+                setShowEmojiPicker(false);
+            }
         };
         document.addEventListener('mousedown', handleClickOutside);
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
+
+    const handleCreateGroup = async () => {
+        if (!groupName.trim() || !user || !token) return;
+        try {
+            const res = await fetch(`${API_URL}/chats`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                body: JSON.stringify({ userId: user.id, name: groupName.trim(), type: 'group', memberIds: selectedGroupMembers })
+            });
+            if (res.ok) {
+                const newGroup = await res.json();
+                setSelectedChat({ id: newGroup.id, type: 'group', name: newGroup.name });
+                const chatsRes = await fetch(`${API_URL}/chats?userId=${user.id}`, { headers: { 'Authorization': `Bearer ${token}` } });
+                if (chatsRes.ok) setChats(await chatsRes.json());
+                setIsCreateGroupOpen(false);
+                setGroupName('');
+                setSelectedGroupMembers([]);
+            }
+        } catch (err) {
+            console.error('Failed to create group', err);
+        }
+    };
 
     useEffect(() => {
         if (!user || !token) return;
@@ -352,7 +406,30 @@ const ChatPage: React.FC<ChatPageProps> = ({ onBackToHome }) => {
                     <div className="flex items-center gap-4 text-[var(--wa-text-secondary)]">
                         <Users size={20} className="cursor-pointer hover:opacity-80" onClick={() => setActiveTab('users')} />
                         <MessageSquare size={20} className="cursor-pointer hover:opacity-80" onClick={() => setActiveTab('groups')} />
-                        <MoreVertical size={20} className="cursor-pointer hover:opacity-80" />
+                        <div className="relative">
+                            <MoreVertical
+                                size={20}
+                                className="cursor-pointer hover:opacity-80"
+                                onClick={() => setShowMainDropdown(!showMainDropdown)}
+                            />
+                            {showMainDropdown && (
+                                <div ref={mainDropdownRef} className="absolute top-8 right-0 w-52 bg-[var(--wa-sidebar)] rounded-lg shadow-xl border border-[var(--wa-border)] py-2 z-50 animate-in fade-in zoom-in-95">
+                                    <button onClick={() => { setShowProfileModal(true); setShowMainDropdown(false); }} className="w-full px-4 py-2.5 text-left flex items-center gap-3 hover:bg-[var(--wa-hover)] text-sm text-[var(--wa-text-primary)]">
+                                        <UserIcon size={18} /> Profile & Bio
+                                    </button>
+                                    <button onClick={() => { toggleDarkMode(); setShowMainDropdown(false); }} className="w-full px-4 py-2.5 text-left flex items-center gap-3 hover:bg-[var(--wa-hover)] text-sm text-[var(--wa-text-primary)]">
+                                        {isDarkMode ? <Sun size={18} /> : <Moon size={18} />} {isDarkMode ? 'Light Mode' : 'Dark Mode'}
+                                    </button>
+                                    <button onClick={() => { setShowSettingsModal(true); setShowMainDropdown(false); }} className="w-full px-4 py-2.5 text-left flex items-center gap-3 hover:bg-[var(--wa-hover)] text-sm text-[var(--wa-text-primary)]">
+                                        <Settings size={18} /> Settings
+                                    </button>
+                                    <div className="border-t border-[var(--wa-border)] my-1"></div>
+                                    <button onClick={handleLogout} className="w-full px-4 py-2.5 text-left flex items-center gap-3 hover:bg-[var(--wa-hover)] text-sm text-red-500 font-medium">
+                                        <LogOut size={18} /> Log Out
+                                    </button>
+                                </div>
+                            )}
+                        </div>
                         <LogOut size={20} className="cursor-pointer hover:opacity-80" onClick={handleLogout} />
                     </div>
                 </div>
@@ -437,220 +514,345 @@ const ChatPage: React.FC<ChatPageProps> = ({ onBackToHome }) => {
 
             {/* Main Chat Area */}
             {selectedChat ? (
-                <div className="flex-1 flex flex-col relative w-full h-full bg-[var(--wa-bg-chat)] wa-bg-pattern">
-                    {/* Header */}
-                    <div className="h-[59px] px-4 py-2.5 bg-[var(--wa-bg-default)] flex items-center justify-between shrink-0 shadow-sm z-10 relative border-l border-[var(--wa-border)]">
-                        <div className="flex items-center gap-3 cursor-pointer">
-                            <div className="w-10 h-10 bg-[var(--wa-border)] rounded-full flex items-center justify-center text-[var(--wa-text-primary)] font-bold shrink-0">
-                                {(selectedChat.name || 'C')[0].toUpperCase()}
+                <div className="flex-1 flex flex-row h-full overflow-hidden">
+                    {/* Active Chat Column */}
+                    <div className="flex-1 flex flex-col relative w-full h-full bg-[var(--wa-bg-chat)] wa-bg-pattern border-r border-[var(--wa-border)]">
+                        {/* Header */}
+                        <div className="h-[59px] px-4 py-2.5 bg-[var(--wa-bg-default)] flex items-center justify-between shrink-0 shadow-sm z-10 relative border-l border-[var(--wa-border)]">
+                            <div
+                                onClick={() => setShowContactDrawer(!showContactDrawer)}
+                                className="flex items-center gap-3 cursor-pointer hover:opacity-90 transition-opacity"
+                            >
+                                <div className="w-10 h-10 bg-[var(--wa-border)] rounded-full flex items-center justify-center text-[var(--wa-text-primary)] font-bold shrink-0">
+                                    {(selectedChat.name || 'C')[0].toUpperCase()}
+                                </div>
+                                <div className="flex flex-col justify-center">
+                                    <h3 className="font-normal text-[16px] leading-5">{selectedChat.name}</h3>
+                                    <p className="text-[13px] text-[var(--wa-primary)] font-medium hover:underline">click here for contact info</p>
+                                </div>
                             </div>
-                            <div className="flex flex-col justify-center">
-                                <h3 className="font-normal text-[16px] leading-5">{selectedChat.name}</h3>
-                                <p className="text-[13px] text-[var(--wa-text-secondary)]">click here for contact info</p>
+                            <div className="flex items-center gap-5 text-[var(--wa-text-secondary)]">
+                                <Search size={20} className="cursor-pointer" />
+                                <MoreVertical size={20} className="cursor-pointer hover:opacity-80" onClick={() => setShowContactDrawer(!showContactDrawer)} />
                             </div>
                         </div>
-                        <div className="flex items-center gap-5 text-[var(--wa-text-secondary)]">
-                            <Search size={20} className="cursor-pointer" />
-                            <MoreVertical size={20} className="cursor-pointer" />
-                        </div>
-                    </div>
 
-                    {/* Message Feed */}
-                    <div className="flex-1 overflow-y-auto px-[5%] py-4 space-y-2 relative z-10">
-                        {messages.filter(m => m.chat_id === selectedChat.id).map((m, i) => {
-                            const isOwn = m.sender_id === user.id;
+                        {/* Message Feed */}
+                        <div className="flex-1 overflow-y-auto px-[5%] py-4 space-y-2 relative z-10">
+                            {messages.filter(m => m.chat_id === selectedChat.id).map((m, i) => {
+                                const isOwn = m.sender_id === user.id;
 
-                            let pollData: any = null;
-                            if (m.type === 'poll') {
-                                try { pollData = typeof m.content === 'string' ? JSON.parse(m.content) : m.content; } catch (e) {}
-                            }
+                                let pollData: any = null;
+                                if (m.type === 'poll') {
+                                    try { pollData = typeof m.content === 'string' ? JSON.parse(m.content) : m.content; } catch (e) {}
+                                }
 
-                            let contactData: any = null;
-                            if (m.type === 'contact') {
-                                try { contactData = typeof m.content === 'string' ? JSON.parse(m.content) : m.content; } catch (e) {}
-                            }
+                                let contactData: any = null;
+                                if (m.type === 'contact') {
+                                    try { contactData = typeof m.content === 'string' ? JSON.parse(m.content) : m.content; } catch (e) {}
+                                }
 
-                            return (
-                                <div key={i} className={`flex ${isOwn ? 'justify-end' : 'justify-start'} group relative`}>
-                                    <div className={`max-w-[65%] px-2.5 py-1.5 rounded-lg relative shadow-sm ${isOwn ? 'bg-[var(--wa-outgoing)] rounded-tr-none' : 'bg-[var(--wa-incoming)] rounded-tl-none'} text-[14.2px] text-[var(--wa-text-primary)]`}>
-                                        
-                                        {!isOwn && selectedChat.type === 'group' && (
-                                            <p className="text-[12.5px] font-medium text-[#00a884] mb-0.5">{m.username || `User`}</p>
-                                        )}
-
-                                        <div className="mb-[15px]">
-                                            {m.type === 'image' ? (
-                                                <img src={m.content} alt="Media" className="rounded-md max-h-72 object-cover cursor-pointer hover:opacity-95 mt-1" onClick={() => window.open(m.content, '_blank')} />
-                                            ) : m.type === 'video' ? (
-                                                <video src={m.content} controls className="rounded-md max-h-72 mt-1" />
-                                            ) : m.type === 'audio' ? (
-                                                <div className="flex items-center gap-3 p-1 rounded-md min-w-[200px]">
-                                                    <button onClick={() => setPlayingAudioId(playingAudioId === m.id ? null : m.id)} className="text-[var(--wa-text-secondary)]">
-                                                        {playingAudioId === m.id ? <Pause size={24} /> : <Play size={24} />}
-                                                    </button>
-                                                    <audio src={m.content} className="w-full h-8" controls />
-                                                </div>
-                                            ) : m.type === 'document' ? (
-                                                <a href={m.content} target="_blank" rel="noreferrer" className="flex items-center gap-3 p-2 bg-black/5 rounded-md mt-1">
-                                                    <FileText size={24} className="text-[var(--wa-text-secondary)]" />
-                                                    <div className="flex-1 truncate max-w-[200px]">
-                                                        <p className="text-sm font-normal truncate">{m.content.split('/').pop() || 'Document'}</p>
-                                                    </div>
-                                                    <Download size={20} className="text-[var(--wa-text-secondary)]" />
-                                                </a>
-                                            ) : m.type === 'poll' && pollData ? (
-                                                <div className="space-y-2 min-w-[240px] mt-1">
-                                                    <div className="font-medium">{pollData.question}</div>
-                                                    <div className="space-y-1">
-                                                        {pollData.options?.map((opt: any) => {
-                                                            const totalVotes = pollData.options.reduce((acc: number, cur: any) => acc + (cur.voters?.length || 0), 0);
-                                                            const optVotes = opt.voters?.length || 0;
-                                                            const pct = totalVotes > 0 ? Math.round((optVotes / totalVotes) * 100) : 0;
-                                                            const hasVoted = opt.voters?.includes(user.id);
-                                                            return (
-                                                                <button
-                                                                    key={opt.id}
-                                                                    onClick={() => handlePollVote(m.id, opt.id)}
-                                                                    className={`w-full text-left px-2 py-1.5 rounded-md relative overflow-hidden text-sm bg-black/5 ${hasVoted ? 'bg-[#00a884]/20' : ''}`}
-                                                                >
-                                                                    <div className="absolute top-0 left-0 bottom-0 bg-[#00a884]/30 transition-all duration-300" style={{ width: `${pct}%` }}></div>
-                                                                    <div className="relative z-10 flex justify-between items-center">
-                                                                        <span>{opt.text}</span>
-                                                                    </div>
-                                                                </button>
-                                                            );
-                                                        })}
-                                                    </div>
-                                                </div>
-                                            ) : m.type === 'contact' && contactData ? (
-                                                <div className="p-2 border-b border-[var(--wa-border)] mt-1 min-w-[200px]">
-                                                    <div className="flex items-center gap-3">
-                                                        <div className="w-10 h-10 bg-[var(--wa-border)] rounded-full flex items-center justify-center font-bold text-[var(--wa-text-primary)]">
-                                                            {contactData.username[0].toUpperCase()}
-                                                        </div>
-                                                        <p className="font-normal text-[15px]">{contactData.username}</p>
-                                                    </div>
-                                                </div>
-                                            ) : (
-                                                <span className="whitespace-pre-wrap break-words">{m.content}</span>
-                                            )}
-                                        </div>
-
-                                        {/* Reactions display */}
-                                        {m.reactions && m.reactions.length > 0 && (
-                                            <div className="absolute -bottom-2 left-2 flex bg-[var(--wa-sidebar)] rounded-full border border-[var(--wa-border)] shadow-sm px-1 py-0.5 z-10">
-                                                {m.reactions.map((r, idx) => (
-                                                    <span key={idx} className="text-xs flex items-center px-0.5">
-                                                        {r.emoji} <span className="text-[10px] ml-0.5 text-[var(--wa-text-secondary)]">{r.count}</span>
-                                                    </span>
-                                                ))}
-                                            </div>
-                                        )}
-
-                                        <div className="float-right -mb-1 mt-1 ml-3 flex items-center gap-1 text-[11px] text-[var(--wa-text-secondary)]">
-                                            <span>{new Date(m.timestamp || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                                            {isOwn && <CheckCheck size={14} className="text-[#53bdeb]" />}
-                                        </div>
-
-                                        {!isOwn && (
+                                return (
+                                    <div key={m.id || i} className={`flex flex-col ${isOwn ? 'items-end' : 'items-start'} mb-1`}>
+                                        <div
+                                            onContextMenu={(e) => {
+                                                e.preventDefault();
+                                                setActiveReactionMsgId(activeReactionMsgId === m.id ? null : m.id);
+                                            }}
+                                            className={`relative max-w-[65%] px-3 py-1.5 rounded-lg text-[14.2px] leading-[19px] shadow-sm group cursor-pointer ${
+                                                isOwn ? 'bg-[var(--wa-outgoing)] text-[var(--wa-text-primary)] rounded-tr-none' : 'bg-[var(--wa-incoming)] text-[var(--wa-text-primary)] rounded-tl-none'
+                                            }`}
+                                        >
+                                            {/* Message dropdown menu button */}
                                             <button
-                                                onClick={() => setActiveReactionMsgId(activeReactionMsgId === m.id ? null : m.id)}
-                                                className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 text-[var(--wa-text-secondary)] bg-[var(--wa-sidebar)]/80 rounded-full p-1 shadow-sm"
+                                                onClick={() => setActiveMsgMenu(activeMsgMenu === m.id ? null : m.id)}
+                                                className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 text-[var(--wa-text-secondary)] p-0.5 rounded hover:bg-black/10 transition-opacity z-10"
                                             >
-                                                <Smile size={16} />
+                                                <ChevronDown size={14} />
                                             </button>
-                                        )}
 
-                                        {!isOwn && activeReactionMsgId === m.id && (
-                                            <div ref={reactionPickerRef} className="absolute -top-10 left-0 z-40 bg-[var(--wa-sidebar)] rounded-full p-1.5 shadow-lg flex gap-1 animate-in zoom-in-95 border border-[var(--wa-border)]">
-                                                {REACTION_EMOJIS.map((emoji) => (
-                                                    <button key={emoji} onClick={() => handleToggleReaction(m.id, emoji)} className="text-lg hover:scale-125 transition-transform px-1">
+                                            {/* Message context menu */}
+                                            {activeMsgMenu === m.id && (
+                                                <div ref={msgMenuRef} className="absolute right-0 top-6 z-50 bg-[var(--wa-sidebar)] rounded-lg shadow-lg border border-[var(--wa-border)] py-1 text-xs w-36 animate-in fade-in">
+                                                    <button onClick={() => { setForwardMsg(m); setActiveMsgMenu(null); }} className="w-full text-left px-3 py-1.5 hover:bg-[var(--wa-hover)] flex items-center gap-2 text-[var(--wa-text-primary)]">
+                                                        <Forward size={12} /> Forward
+                                                    </button>
+                                                    <button onClick={() => handleDeleteForMe(m.id)} className="w-full text-left px-3 py-1.5 hover:bg-[var(--wa-hover)] flex items-center gap-2 text-red-500">
+                                                        <Trash2 size={12} /> Delete for me
+                                                    </button>
+                                                    {isOwn && (
+                                                        <button onClick={() => handleDeleteForEveryone(m.id)} className="w-full text-left px-3 py-1.5 hover:bg-[var(--wa-hover)] flex items-center gap-2 text-red-500">
+                                                            <Trash2 size={12} /> Delete for all
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            )}
+
+                                            {/* Reaction picker overlay */}
+                                            {activeReactionMsgId === m.id && (
+                                                <div ref={reactionPickerRef} className="absolute -top-10 left-0 z-40 flex bg-[var(--wa-sidebar)] rounded-full border border-[var(--wa-border)] shadow-lg px-2 py-1 gap-1 animate-in fade-in">
+                                                    {REACTION_EMOJIS.map((emoji) => (
+                                                        <button
+                                                            key={emoji}
+                                                            onClick={() => handleToggleReaction(m.id, emoji)}
+                                                            className="hover:scale-125 transition-transform text-base px-1"
+                                                        >
+                                                            {emoji}
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            )}
+
+                                            {/* Message content types */}
+                                            <div className="pr-3">
+                                                {m.type === 'image' ? (
+                                                    <div className="mb-1 rounded overflow-hidden max-w-[280px]">
+                                                        <img src={m.content} alt="Attachment" className="w-full object-cover max-h-[250px]" />
+                                                    </div>
+                                                ) : m.type === 'video' ? (
+                                                    <div className="mb-1 rounded overflow-hidden max-w-[280px]">
+                                                        <video src={m.content} controls className="w-full max-h-[250px]" />
+                                                    </div>
+                                                ) : m.type === 'audio' ? (
+                                                    <div className="flex items-center gap-2 py-1 min-w-[200px]">
+                                                        <button
+                                                            onClick={() => setPlayingAudioId(playingAudioId === m.id ? null : m.id)}
+                                                            className="w-8 h-8 rounded-full bg-[#00a884] text-white flex items-center justify-center shrink-0"
+                                                        >
+                                                            {playingAudioId === m.id ? <Pause size={16} /> : <Play size={16} />}
+                                                        </button>
+                                                        <div className="flex-1 h-1.5 bg-black/20 rounded-full overflow-hidden">
+                                                            <div className={`h-full bg-[#00a884] ${playingAudioId === m.id ? 'w-3/4 transition-all duration-1000' : 'w-0'}`}></div>
+                                                        </div>
+                                                        <audio src={m.content} id={`audio-${m.id}`} onEnded={() => setPlayingAudioId(null)} />
+                                                    </div>
+                                                ) : m.type === 'document' ? (
+                                                    <div className="flex items-center gap-3 p-2 bg-black/5 rounded-lg my-1">
+                                                        <FileText size={24} className="text-[#00a884]" />
+                                                        <div className="flex-1 truncate text-xs">
+                                                            <p className="font-medium truncate">{m.content.split('/').pop() || 'Document'}</p>
+                                                        </div>
+                                                        <a href={m.content} download target="_blank" rel="noreferrer" className="text-[var(--wa-text-secondary)] hover:text-[var(--wa-text-primary)]">
+                                                            <Download size={16} />
+                                                        </a>
+                                                    </div>
+                                                ) : m.type === 'poll' && pollData ? (
+                                                    <div className="p-2 border-b border-[var(--wa-border)] mt-1 min-w-[220px]">
+                                                        <p className="font-medium text-[15px] mb-2">{pollData.question}</p>
+                                                        <div className="space-y-1.5">
+                                                            {pollData.options.map((opt: any) => {
+                                                                const totalVotes = pollData.options.reduce((sum: number, o: any) => sum + (o.voters?.length || 0), 0);
+                                                                const optVotes = opt.voters?.length || 0;
+                                                                const pct = totalVotes > 0 ? Math.round((optVotes / totalVotes) * 100) : 0;
+                                                                const hasVoted = opt.voters?.includes(user.id);
+                                                                return (
+                                                                    <button
+                                                                        key={opt.id}
+                                                                        onClick={() => handlePollVote(m.id, opt.id)}
+                                                                        className={`w-full text-left px-2 py-1.5 rounded-md relative overflow-hidden text-sm bg-black/5 ${hasVoted ? 'bg-[#00a884]/20' : ''}`}
+                                                                    >
+                                                                        <div className="absolute top-0 left-0 bottom-0 bg-[#00a884]/30 transition-all duration-300" style={{ width: `${pct}%` }}></div>
+                                                                        <div className="relative z-10 flex justify-between items-center">
+                                                                            <span>{opt.text}</span>
+                                                                        </div>
+                                                                    </button>
+                                                                );
+                                                            })}
+                                                        </div>
+                                                    </div>
+                                                ) : m.type === 'contact' && contactData ? (
+                                                    <div className="p-2 border-b border-[var(--wa-border)] mt-1 min-w-[200px]">
+                                                        <div className="flex items-center gap-3">
+                                                            <div className="w-10 h-10 bg-[var(--wa-border)] rounded-full flex items-center justify-center font-bold text-[var(--wa-text-primary)]">
+                                                                {contactData.username[0].toUpperCase()}
+                                                            </div>
+                                                            <p className="font-normal text-[15px]">{contactData.username}</p>
+                                                        </div>
+                                                    </div>
+                                                ) : (
+                                                    <span className="whitespace-pre-wrap break-words">{m.content}</span>
+                                                )}
+                                            </div>
+
+                                            {/* Reactions display */}
+                                            {m.reactions && m.reactions.length > 0 && (
+                                                <div className="absolute -bottom-2 left-2 flex bg-[var(--wa-sidebar)] rounded-full border border-[var(--wa-border)] shadow-sm px-1 py-0.5 z-10">
+                                                    {m.reactions.map((r, idx) => (
+                                                        <span key={idx} className="text-xs flex items-center px-0.5">
+                                                            {r.emoji} <span className="text-[10px] ml-0.5 text-[var(--wa-text-secondary)]">{r.count}</span>
+                                                        </span>
+                                                    ))}
+                                                </div>
+                                            )}
+
+                                            <div className="float-right -mb-1 mt-1 ml-3 flex items-center gap-1 text-[11px] text-[var(--wa-text-secondary)]">
+                                                <span>{new Date(m.timestamp || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                                                {isOwn && <CheckCheck size={14} className="text-[#53bdeb]" />}
+                                            </div>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                            {uploading && (
+                                <div className="flex justify-end">
+                                    <div className="bg-[var(--wa-outgoing)] text-[var(--wa-text-primary)] px-3 py-2 rounded-lg text-[14.2px] shadow-sm">
+                                        <span className="animate-pulse">Uploading attachment...</span>
+                                    </div>
+                                </div>
+                            )}
+                            <div ref={messagesEndRef} />
+                        </div>
+
+                        {/* Input Area */}
+                        <div className="px-4 py-2.5 bg-[var(--wa-bg-default)] flex items-end gap-2 shrink-0 relative z-20 border-l border-[var(--wa-border)] min-h-[62px]">
+                            {showAttachmentMenu && (
+                                <div ref={attachmentMenuRef} className="absolute bottom-16 left-4 z-40 bg-[var(--wa-sidebar)] rounded-2xl shadow-xl border border-[var(--wa-border)] p-4 flex flex-col gap-4 animate-in slide-in-from-bottom-2 w-64">
+                                    <button onClick={() => docInputRef.current?.click()} className="flex items-center gap-3 hover:bg-[var(--wa-hover)] p-2 rounded-lg text-[var(--wa-text-primary)]">
+                                        <div className="w-10 h-10 rounded-full bg-indigo-500 text-white flex items-center justify-center"><FileText size={20} /></div> Document
+                                    </button>
+                                    <button onClick={() => mediaInputRef.current?.click()} className="flex items-center gap-3 hover:bg-[var(--wa-hover)] p-2 rounded-lg text-[var(--wa-text-primary)]">
+                                        <div className="w-10 h-10 rounded-full bg-blue-500 text-white flex items-center justify-center"><ImageIcon size={20} /></div> Photos & Videos
+                                    </button>
+                                    <button onClick={startCamera} className="flex items-center gap-3 hover:bg-[var(--wa-hover)] p-2 rounded-lg text-[var(--wa-text-primary)]">
+                                        <div className="w-10 h-10 rounded-full bg-rose-500 text-white flex items-center justify-center"><Camera size={20} /></div> Camera
+                                    </button>
+                                    <button onClick={() => { setShowContactModal(true); setShowAttachmentMenu(false); }} className="flex items-center gap-3 hover:bg-[var(--wa-hover)] p-2 rounded-lg text-[var(--wa-text-primary)]">
+                                        <div className="w-10 h-10 rounded-full bg-gray-500 text-white flex items-center justify-center"><UserCheck size={20} /></div> Contact
+                                    </button>
+                                    <button onClick={() => { setShowPollModal(true); setShowAttachmentMenu(false); }} className="flex items-center gap-3 hover:bg-[var(--wa-hover)] p-2 rounded-lg text-[var(--wa-text-primary)]">
+                                        <div className="w-10 h-10 rounded-full bg-yellow-500 text-white flex items-center justify-center"><BarChart2 size={20} /></div> Poll
+                                    </button>
+                                </div>
+                            )}
+
+                            {showEmojiPicker && (
+                                <div ref={emojiPickerRef} className="absolute bottom-16 left-4 z-40 bg-[var(--wa-sidebar)] rounded-2xl shadow-2xl border border-[var(--wa-border)] p-3 w-80 max-h-72 overflow-y-auto animate-in slide-in-from-bottom-2">
+                                    <div className="flex justify-between items-center pb-2 border-b border-[var(--wa-border)] mb-2">
+                                        <span className="text-xs font-semibold text-[var(--wa-text-secondary)] uppercase">Pick an Emoji</span>
+                                        <button onClick={() => setShowEmojiPicker(false)} className="text-[var(--wa-text-secondary)] hover:text-[var(--wa-text-primary)]">
+                                            <X size={16} />
+                                        </button>
+                                    </div>
+                                    {EMOJI_CATEGORIES.map((cat, idx) => (
+                                        <div key={idx} className="mb-3">
+                                            <div className="text-[11px] font-medium text-[var(--wa-text-secondary)] mb-1 px-1">{cat.category}</div>
+                                            <div className="grid grid-cols-7 gap-1">
+                                                {cat.emojis.map((emoji, eIdx) => (
+                                                    <button
+                                                        key={eIdx}
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setMessageInput(prev => prev + emoji);
+                                                        }}
+                                                        className="text-xl hover:bg-[var(--wa-hover)] p-1 rounded transition-transform hover:scale-125 flex items-center justify-center"
+                                                    >
                                                         {emoji}
                                                     </button>
                                                 ))}
                                             </div>
-                                        )}
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
 
-                                        {/* Dropdown Menu Trigger */}
-                                        <button
-                                            onClick={() => setActiveMsgMenu(activeMsgMenu === m.id ? null : m.id)}
-                                            className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 text-[var(--wa-text-secondary)] bg-[var(--wa-sidebar)]/90 rounded-full p-1 shadow-none transition-opacity"
-                                        >
-                                            <ChevronDown size={18} />
-                                        </button>
+                            <div className="flex gap-4 items-center text-[var(--wa-text-secondary)] mb-2.5 ml-2 shrink-0">
+                                <Smile
+                                    size={26}
+                                    className={`cursor-pointer transition-colors ${showEmojiPicker ? 'text-[var(--wa-primary)]' : 'hover:text-[var(--wa-text-primary)]'}`}
+                                    onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+                                />
+                                <Paperclip size={24} className={`cursor-pointer transition-transform ${showAttachmentMenu ? 'rotate-45 text-[var(--wa-text-primary)]' : 'hover:text-[var(--wa-text-primary)]'}`} onClick={() => setShowAttachmentMenu(!showAttachmentMenu)} />
+                            </div>
 
-                                        {/* Context Menu */}
-                                        {activeMsgMenu === m.id && (
-                                            <div ref={msgMenuRef} className="absolute top-8 right-2 z-50 bg-[var(--wa-sidebar)] rounded-md shadow-lg border border-[var(--wa-border)] min-w-[160px] py-2 animate-in fade-in duration-100">
-                                                <button onClick={() => { setActiveReactionMsgId(m.id); setActiveMsgMenu(null); }} className="w-full text-left px-4 py-2 hover:bg-[var(--wa-hover)] text-sm flex items-center gap-3"><Smile size={16} className="text-[var(--wa-text-secondary)]" /> React</button>
-                                                <button onClick={() => { setForwardMsg(m); setActiveMsgMenu(null); }} className="w-full text-left px-4 py-2 hover:bg-[var(--wa-hover)] text-sm flex items-center gap-3"><Forward size={16} className="text-[var(--wa-text-secondary)]" /> Forward</button>
-                                                <button onClick={() => handleDeleteForMe(m.id)} className="w-full text-left px-4 py-2 hover:bg-[var(--wa-hover)] text-sm flex items-center gap-3"><Trash2 size={16} className="text-[var(--wa-text-secondary)]" /> Delete for me</button>
-                                                {isOwn && <button onClick={() => handleDeleteForEveryone(m.id)} className="w-full text-left px-4 py-2 hover:bg-[var(--wa-hover)] text-sm flex items-center gap-3 text-rose-500"><Trash2 size={16} /> Delete for everyone</button>}
+                            <form onSubmit={handleSendMessage} className="flex-1 ml-2">
+                                <input
+                                    type="text"
+                                    value={messageInput}
+                                    onChange={(e) => setMessageInput(e.target.value)}
+                                    className="w-full bg-white dark:bg-[#2a3942] border-none outline-none px-4 py-[9px] rounded-lg text-[15px] placeholder-[var(--wa-text-secondary)] mb-1 shadow-sm text-[var(--wa-text-primary)]"
+                                    placeholder="Type a message"
+                                />
+                            </form>
+
+                            <div className="mb-2.5 mr-2 ml-2 shrink-0">
+                                {messageInput.trim() ? (
+                                    <button onClick={handleSendMessage} className="text-[var(--wa-text-secondary)] hover:text-[var(--wa-primary)]">
+                                        <Send size={24} />
+                                    </button>
+                                ) : (
+                                    <button className="text-[var(--wa-text-secondary)] hover:text-[var(--wa-text-primary)]">
+                                        <Mic size={24} />
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Right Side Contact Info Drawer */}
+                    {showContactDrawer && (
+                        <div className="w-[340px] shrink-0 bg-[var(--wa-sidebar)] border-l border-[var(--wa-border)] flex flex-col h-full overflow-y-auto animate-in slide-in-from-right duration-200">
+                            <div className="h-[59px] px-4 bg-[var(--wa-bg-default)] flex items-center justify-between border-b border-[var(--wa-border)] shrink-0">
+                                <h3 className="font-medium text-[16px]">Contact Info</h3>
+                                <button onClick={() => setShowContactDrawer(false)} className="text-[var(--wa-text-secondary)] hover:text-[var(--wa-text-primary)] p-1 rounded-full">
+                                    <X size={20} />
+                                </button>
+                            </div>
+
+                            <div className="flex flex-col items-center p-6 border-b border-[var(--wa-border)] bg-[var(--wa-sidebar)]">
+                                <div className="w-24 h-24 bg-[var(--wa-border)] rounded-full flex items-center justify-center text-[var(--wa-text-primary)] text-3xl font-bold mb-4 shadow-inner">
+                                    {(selectedChat.name || 'C')[0].toUpperCase()}
+                                </div>
+                                <h2 className="text-xl font-medium text-[var(--wa-text-primary)]">{selectedChat.name}</h2>
+                                <p className="text-sm text-[var(--wa-text-secondary)] mt-1 capitalize">
+                                    {selectedChat.type === 'group' ? 'Group Chat' : (onlineUsers[selectedChat.id] || 'offline')}
+                                </p>
+                            </div>
+
+                            <div className="p-4 border-b border-[var(--wa-border)] space-y-3">
+                                <h4 className="text-xs uppercase tracking-wider font-semibold text-[var(--wa-text-secondary)]">About / Details</h4>
+                                <p className="text-sm text-[var(--wa-text-primary)]">
+                                    {selectedChat.type === 'group' ? 'Orion Group Conversation' : 'Hey there! I am using Orion.'}
+                                </p>
+                            </div>
+
+                            {selectedChat.type === 'group' && (
+                                <div className="p-4 border-b border-[var(--wa-border)] space-y-3">
+                                    <h4 className="text-xs uppercase tracking-wider font-semibold text-[var(--wa-text-secondary)]">Group Members</h4>
+                                    <div className="space-y-2 max-h-48 overflow-y-auto">
+                                        {users.map(m => (
+                                            <div key={m.id} className="flex items-center gap-3 p-1.5 rounded-lg hover:bg-[var(--wa-hover)]">
+                                                <div className="w-8 h-8 bg-[var(--wa-border)] rounded-full flex items-center justify-center font-bold text-xs">
+                                                    {m.username[0].toUpperCase()}
+                                                </div>
+                                                <div className="flex-1 text-sm font-medium text-[var(--wa-text-primary)] truncate">{m.username}</div>
+                                                <span className={`w-2 h-2 rounded-full ${onlineUsers[m.id] === 'online' ? 'bg-[#00a884]' : 'bg-gray-400'}`}></span>
                                             </div>
-                                        )}
+                                        ))}
                                     </div>
                                 </div>
-                            );
-                        })}
-                        {uploading && (
-                            <div className="flex justify-end">
-                                <div className="bg-[var(--wa-outgoing)] text-[var(--wa-text-primary)] px-3 py-2 rounded-lg text-[14.2px] shadow-sm">
-                                    <span className="animate-pulse">Uploading attachment...</span>
-                                </div>
-                            </div>
-                        )}
-                        <div ref={messagesEndRef} />
-                    </div>
-
-                    {/* Input Area */}
-                    <div className="px-4 py-2.5 bg-[var(--wa-bg-default)] flex items-end gap-2 shrink-0 relative z-20 border-l border-[var(--wa-border)] min-h-[62px]">
-                        {showAttachmentMenu && (
-                            <div ref={attachmentMenuRef} className="absolute bottom-16 left-4 z-40 bg-[var(--wa-sidebar)] rounded-2xl shadow-xl border border-[var(--wa-border)] p-4 flex flex-col gap-4 animate-in slide-in-from-bottom-2 w-64">
-                                <button onClick={() => docInputRef.current?.click()} className="flex items-center gap-3 hover:bg-[var(--wa-hover)] p-2 rounded-lg text-[var(--wa-text-primary)]">
-                                    <div className="w-10 h-10 rounded-full bg-indigo-500 text-white flex items-center justify-center"><FileText size={20} /></div> Document
-                                </button>
-                                <button onClick={() => mediaInputRef.current?.click()} className="flex items-center gap-3 hover:bg-[var(--wa-hover)] p-2 rounded-lg text-[var(--wa-text-primary)]">
-                                    <div className="w-10 h-10 rounded-full bg-blue-500 text-white flex items-center justify-center"><ImageIcon size={20} /></div> Photos & Videos
-                                </button>
-                                <button onClick={startCamera} className="flex items-center gap-3 hover:bg-[var(--wa-hover)] p-2 rounded-lg text-[var(--wa-text-primary)]">
-                                    <div className="w-10 h-10 rounded-full bg-rose-500 text-white flex items-center justify-center"><Camera size={20} /></div> Camera
-                                </button>
-                                <button onClick={() => { setShowContactModal(true); setShowAttachmentMenu(false); }} className="flex items-center gap-3 hover:bg-[var(--wa-hover)] p-2 rounded-lg text-[var(--wa-text-primary)]">
-                                    <div className="w-10 h-10 rounded-full bg-gray-500 text-white flex items-center justify-center"><UserCheck size={20} /></div> Contact
-                                </button>
-                                <button onClick={() => { setShowPollModal(true); setShowAttachmentMenu(false); }} className="flex items-center gap-3 hover:bg-[var(--wa-hover)] p-2 rounded-lg text-[var(--wa-text-primary)]">
-                                    <div className="w-10 h-10 rounded-full bg-yellow-500 text-white flex items-center justify-center"><BarChart2 size={20} /></div> Poll
-                                </button>
-                            </div>
-                        )}
-
-                        <div className="flex gap-4 items-center text-[var(--wa-text-secondary)] mb-2.5 ml-2 shrink-0">
-                            <Smile size={26} className="cursor-pointer hover:text-[var(--wa-text-primary)]" />
-                            <Paperclip size={24} className={`cursor-pointer transition-transform ${showAttachmentMenu ? 'rotate-45 text-[var(--wa-text-primary)]' : 'hover:text-[var(--wa-text-primary)]'}`} onClick={() => setShowAttachmentMenu(!showAttachmentMenu)} />
-                        </div>
-
-                        <form onSubmit={handleSendMessage} className="flex-1 ml-2">
-                            <input
-                                type="text"
-                                value={messageInput}
-                                onChange={(e) => setMessageInput(e.target.value)}
-                                className="w-full bg-white dark:bg-[#2a3942] border-none outline-none px-4 py-[9px] rounded-lg text-[15px] placeholder-[var(--wa-text-secondary)] mb-1 shadow-sm"
-                                placeholder="Type a message"
-                            />
-                        </form>
-
-                        <div className="mb-2.5 mr-2 ml-2 shrink-0">
-                            {messageInput.trim() ? (
-                                <button onClick={handleSendMessage} className="text-[var(--wa-text-secondary)] hover:text-[var(--wa-primary)]">
-                                    <Send size={24} />
-                                </button>
-                            ) : (
-                                <button className="text-[var(--wa-text-secondary)] hover:text-[var(--wa-text-primary)]">
-                                    <Mic size={24} />
-                                </button>
                             )}
+
+                            <div className="p-4 space-y-2">
+                                <button
+                                    onClick={() => setIsMuted(!isMuted)}
+                                    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-[var(--wa-hover)] text-sm text-[var(--wa-text-primary)]"
+                                >
+                                    <BellOff size={18} />
+                                    <span>{isMuted ? 'Unmute Notifications' : 'Mute Notifications'}</span>
+                                </button>
+                                <button
+                                    onClick={() => {
+                                        setMessages([]);
+                                        setShowContactDrawer(false);
+                                    }}
+                                    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-[var(--wa-hover)] text-sm text-red-500"
+                                >
+                                    <Trash2 size={18} />
+                                    <span>Clear Messages</span>
+                                </button>
+                            </div>
                         </div>
-                    </div>
+                    )}
                 </div>
             ) : (
                 <div className="flex-1 flex flex-col items-center justify-center text-center bg-[var(--wa-bg-default)] border-b-[6px] border-[#00a884]">
@@ -740,6 +942,115 @@ const ChatPage: React.FC<ChatPageProps> = ({ onBackToHome }) => {
                                 </button>
                             ))}
                         </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Create Group Modal */}
+            {isCreateGroupOpen && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-6">
+                    <div className="bg-[var(--wa-sidebar)] w-full max-w-md rounded-lg shadow-xl p-6 flex flex-col max-h-[85vh]">
+                        <div className="flex justify-between items-center mb-4 text-[var(--wa-text-primary)]">
+                            <h3 className="text-xl font-medium">Create New Group</h3>
+                            <button onClick={() => setIsCreateGroupOpen(false)}><X size={24} /></button>
+                        </div>
+                        <input
+                            type="text"
+                            className="w-full bg-[var(--wa-bg-default)] border border-[var(--wa-border)] rounded-lg p-3 text-[15px] outline-none mb-4 text-[var(--wa-text-primary)]"
+                            placeholder="Enter Group Name"
+                            value={groupName}
+                            onChange={e => setGroupName(e.target.value)}
+                        />
+                        <p className="text-xs uppercase tracking-wider font-semibold text-[var(--wa-text-secondary)] mb-2">Select Group Members</p>
+                        <div className="overflow-y-auto flex-1 space-y-2 mb-6 border border-[var(--wa-border)] rounded-lg p-2 max-h-48">
+                            {users.map(u => {
+                                const isSelected = selectedGroupMembers.includes(u.id);
+                                return (
+                                    <div
+                                        key={u.id}
+                                        onClick={() => {
+                                            if (isSelected) {
+                                                setSelectedGroupMembers(prev => prev.filter(id => id !== u.id));
+                                            } else {
+                                                setSelectedGroupMembers(prev => [...prev, u.id]);
+                                            }
+                                        }}
+                                        className={`flex items-center justify-between p-2 rounded-lg cursor-pointer hover:bg-[var(--wa-hover)] text-[var(--wa-text-primary)] ${isSelected ? 'bg-[#00a884]/15' : ''}`}
+                                    >
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-8 h-8 bg-[var(--wa-border)] rounded-full flex items-center justify-center font-bold text-xs">{u.username[0].toUpperCase()}</div>
+                                            <span className="font-medium text-sm">{u.username}</span>
+                                        </div>
+                                        {isSelected && <Check size={18} className="text-[#00a884]" />}
+                                    </div>
+                                );
+                            })}
+                        </div>
+                        <button
+                            onClick={handleCreateGroup}
+                            disabled={!groupName.trim()}
+                            className="w-full py-3 bg-[#00a884] hover:bg-[#017561] disabled:opacity-50 text-white rounded-lg font-medium shadow-sm transition-colors"
+                        >
+                            Create Group
+                        </button>
+                    </div>
+                </div>
+            )}
+
+            {/* Profile & Bio Modal */}
+            {showProfileModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-6">
+                    <div className="bg-[var(--wa-sidebar)] w-full max-w-md rounded-lg shadow-xl p-6 flex flex-col">
+                        <div className="flex justify-between items-center mb-4 text-[var(--wa-text-primary)] border-b border-[var(--wa-border)] pb-3">
+                            <h3 className="text-xl font-medium">Your Profile</h3>
+                            <button onClick={() => setShowProfileModal(false)}><X size={24} /></button>
+                        </div>
+                        <div className="flex flex-col items-center mb-6">
+                            <div className="w-24 h-24 bg-[var(--wa-border)] rounded-full flex items-center justify-center text-[var(--wa-text-primary)] text-3xl font-bold mb-3 shadow-inner">
+                                {user?.username ? user.username[0].toUpperCase() : 'U'}
+                            </div>
+                            <h2 className="text-xl font-semibold text-[var(--wa-text-primary)]">{user?.username}</h2>
+                            <p className="text-sm text-[var(--wa-text-secondary)]">{user?.email}</p>
+                        </div>
+                        <div className="space-y-4 mb-6">
+                            <div>
+                                <label className="block text-xs uppercase tracking-wider font-semibold text-[var(--wa-text-secondary)] mb-1">About / Bio</label>
+                                <input
+                                    type="text"
+                                    value={userStatusBio}
+                                    onChange={e => setUserStatusBio(e.target.value)}
+                                    className="w-full bg-[var(--wa-bg-default)] border border-[var(--wa-border)] rounded-lg p-3 text-[15px] outline-none text-[var(--wa-text-primary)]"
+                                />
+                            </div>
+                        </div>
+                        <button onClick={() => setShowProfileModal(false)} className="w-full py-2.5 bg-[#00a884] text-white rounded-lg font-medium">Save & Close</button>
+                    </div>
+                </div>
+            )}
+
+            {/* Settings Modal */}
+            {showSettingsModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-6">
+                    <div className="bg-[var(--wa-sidebar)] w-full max-w-md rounded-lg shadow-xl p-6 flex flex-col">
+                        <div className="flex justify-between items-center mb-4 text-[var(--wa-text-primary)] border-b border-[var(--wa-border)] pb-3">
+                            <h3 className="text-xl font-medium">Settings</h3>
+                            <button onClick={() => setShowSettingsModal(false)}><X size={24} /></button>
+                        </div>
+                        <div className="space-y-4 mb-6 text-[var(--wa-text-primary)]">
+                            <div className="flex items-center justify-between p-3 rounded-lg bg-[var(--wa-bg-default)]">
+                                <span className="font-medium text-sm">Theme Preference</span>
+                                <button onClick={toggleDarkMode} className="px-3 py-1.5 bg-[#00a884] text-white text-xs font-semibold rounded-md">
+                                    {isDarkMode ? 'Switch to Light' : 'Switch to Dark'}
+                                </button>
+                            </div>
+                            <div className="flex items-center justify-between p-3 rounded-lg bg-[var(--wa-bg-default)]">
+                                <span className="font-medium text-sm">Notifications</span>
+                                <button onClick={() => setIsMuted(!isMuted)} className="px-3 py-1.5 border border-[var(--wa-border)] text-xs font-semibold rounded-md">
+                                    {isMuted ? 'Muted' : 'Active'}
+                                </button>
+                            </div>
+                        </div>
+                        <button onClick={() => setShowSettingsModal(false)} className="w-full py-2.5 bg-[#00a884] text-white rounded-lg font-medium">Done</button>
                     </div>
                 </div>
             )}

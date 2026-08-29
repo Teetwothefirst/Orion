@@ -472,7 +472,13 @@ const ChatPage: React.FC<ChatPageProps> = ({ onBackToHome }) => {
 
                             return (
                                 <div key={i} className={`flex ${isOwn ? 'justify-end' : 'justify-start'} group relative`}>
-                                    <div className={`max-w-[65%] px-2.5 py-1.5 rounded-lg relative shadow-sm ${isOwn ? 'bg-[var(--wa-outgoing)] rounded-tr-none' : 'bg-[var(--wa-incoming)] rounded-tl-none'} text-[14.2px] text-[var(--wa-text-primary)]`}>
+                                    <div
+                                        onContextMenu={(e) => {
+                                            e.preventDefault();
+                                            setActiveReactionMsgId(activeReactionMsgId === m.id ? null : m.id);
+                                        }}
+                                        className={`max-w-[65%] px-2.5 py-1.5 rounded-lg relative shadow-sm cursor-pointer ${isOwn ? 'bg-[var(--wa-outgoing)] rounded-tr-none' : 'bg-[var(--wa-incoming)] rounded-tl-none'} text-[14.2px] text-[var(--wa-text-primary)]`}
+                                    >
                                         
                                         {!isOwn && selectedChat.type === 'group' && (
                                             <p className="text-[12.5px] font-medium text-[#00a884] mb-0.5">{m.username || `User`}</p>
@@ -552,16 +558,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ onBackToHome }) => {
                                             {isOwn && <CheckCheck size={14} className="text-[#53bdeb]" />}
                                         </div>
 
-                                        {!isOwn && (
-                                            <button
-                                                onClick={() => setActiveReactionMsgId(activeReactionMsgId === m.id ? null : m.id)}
-                                                className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 text-[var(--wa-text-secondary)] bg-[var(--wa-sidebar)]/80 rounded-full p-1 shadow-sm"
-                                            >
-                                                <Smile size={16} />
-                                            </button>
-                                        )}
-
-                                        {!isOwn && activeReactionMsgId === m.id && (
+                                        {activeReactionMsgId === m.id && (
                                             <div ref={reactionPickerRef} className="absolute -top-10 left-0 z-40 bg-[var(--wa-sidebar)] rounded-full p-1.5 shadow-lg flex gap-1 animate-in zoom-in-95 border border-[var(--wa-border)]">
                                                 {REACTION_EMOJIS.map((emoji) => (
                                                     <button key={emoji} onClick={() => handleToggleReaction(m.id, emoji)} className="text-lg hover:scale-125 transition-transform px-1">
